@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadIdentifier</key>
+	<string>local.claude-mac-env-mirror.chrome</string>
+	<key>PayloadUUID</key>
+	<string>7B40A314-E1E1-5809-A65A-F2619DDF8BED</string>
+	<key>PayloadDisplayName</key>
+	<string>Claude 环境镜像：Chrome 防泄露策略</string>
+	<key>PayloadDescription</key>
+	<string>WebRtcIPHandling=disable_non_proxied_udp（WebRTC 只能走代理）、DnsOverHttpsMode=off（关闭浏览器自带 DoH，交给 Clash）。来自 claude-mac-env-mirror；卸载即恢复。</string>
+	<key>PayloadOrganization</key>
+	<string>claude-mac-env-mirror</string>
+	<key>PayloadRemovalDisallowed</key>
+	<false/>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.google.Chrome</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadIdentifier</key>
+			<string>local.claude-mac-env-mirror.chrome.policy</string>
+			<key>PayloadUUID</key>
+			<string>FED206B4-A543-5B16-B8C4-7962A2E223E0</string>
+			<key>PayloadDisplayName</key>
+			<string>Google Chrome 策略：WebRTC 禁非代理 UDP、DoH 关</string>
+			<key>PayloadEnabled</key>
+			<true/>
+			<key>WebRtcIPHandling</key>
+			<string>disable_non_proxied_udp</string>
+			<key>DnsOverHttpsMode</key>
+			<string>off</string>
+		</dict>
+	</array>
+</dict>
+</plist>
