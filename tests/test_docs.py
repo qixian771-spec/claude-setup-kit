@@ -67,6 +67,12 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(check.main(), 0)
         self.assertIn("PASS", out.getvalue())
 
+    def test_readme_paragraph_names_the_entry_and_the_rules(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        para = readme.split("发给 AI 的一段话", 1)[1].split("\n## ", 1)[0]
+        for needle in ("claude-setup-kit", "START.md", "mirror_check.py", "next_step.py", "conversation.md", "ippure-acceptance.md", "不许切换"):
+            self.assertIn(needle, para, needle)
+
     def test_webrtc_page_has_no_hardcoded_exit_ip(self):
         text = (ROOT / "assets" / "webrtc-test.html").read_text(encoding="utf-8")
         self.assertNotIn("192.220", text)

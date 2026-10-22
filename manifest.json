@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "name": "claude-mac-env-mirror",
+  "name": "claude-setup-kit",
   "baseline": {
     "captured": "2026-10-22",
     "macos": "26.5.2",
@@ -449,6 +449,208 @@
       "title": "系统语言顺序（仅记录，可选）",
       "check": "language",
       "next": "可选：系统设置 → 通用 → 语言与地区 把 English 拖到第一位（ippure 浏览器语言项 24 分）；改了界面会变英文，由使用者决定。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "S1",
+      "title": "Clash Verge：固定出口与 fake-ip DNS",
+      "components": [
+        "clash.core",
+        "clash.mode",
+        "clash.tun",
+        "clash.exit",
+        "clash.rules",
+        "clash.dns",
+        "net.tun_iface",
+        "dns.local53",
+        "dns.system"
+      ],
+      "requires": [],
+      "installer": null,
+      "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A 建节点）",
+      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 右键该配置 → 编辑脚本 → 粘贴 clash-profile.script.js → 保存并激活；设置里开 TUN 模式；代理页把出口分组选到出口节点",
+      "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件和脚本，你在 Clash Verge 里导入、绑定脚本、开 TUN、选节点。"
+    },
+    {
+      "id": "S2",
+      "title": "Claude 直连墙（PF 010）",
+      "components": [
+        "pf.enabled",
+        "pf.010",
+        "loader.010",
+        "daemon.010",
+        "pf.conf"
+      ],
+      "requires": [
+        "S1"
+      ],
+      "installer": "installers/安装Claude直连墙.command",
+      "log": "direct-wall",
+      "user_action": "双击 installers/安装Claude直连墙.command，终端里输入开机密码，看到“安装结束”回来",
+      "say": "第一道墙：Claude 的真实地址只允许从代理出去。双击“安装Claude直连墙.command”，输密码时屏幕不显示字符，输完回车。"
+    },
+    {
+      "id": "S3",
+      "title": "Anthropic 整段墙（PF 011）",
+      "components": [
+        "pf.011",
+        "loader.011",
+        "daemon.011"
+      ],
+      "requires": [
+        "S2"
+      ],
+      "installer": "installers/安装Anthropic整段墙.command",
+      "log": "net-wall",
+      "user_action": "双击 installers/安装Anthropic整段墙.command",
+      "say": "第二道墙：Anthropic 整段网络也只准走代理。双击“安装Anthropic整段墙.command”。"
+    },
+    {
+      "id": "S4",
+      "title": "防泄露墙（PF 020）",
+      "components": [
+        "pf.020",
+        "loader.020",
+        "daemon.020"
+      ],
+      "requires": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "precheck": [
+        "net.tun_iface"
+      ],
+      "installer": "installers/安装防泄露墙.command",
+      "log": "leak-guard",
+      "user_action": "确认 TUN 在，再双击 installers/安装防泄露墙.command",
+      "say": "第三道墙装上后，你这个账户的公网连接只能走 Clash；以后 Clash 一关电脑就上不了网，这是故意的。同意就双击“安装防泄露墙.command”。"
+    },
+    {
+      "id": "S5",
+      "title": "地址更新器",
+      "components": [
+        "daemon.updater",
+        "updater.fresh"
+      ],
+      "requires": [
+        "S2"
+      ],
+      "installer": "installers/安装地址更新器.command",
+      "log": "updater",
+      "user_action": "双击 installers/安装地址更新器.command（会装一条最小 sudoers 规则）",
+      "say": "装地址更新器：每 15 分钟自动刷新 Claude 的地址，会加一条只放行几个命令的免密规则。双击“安装地址更新器.command”。"
+    },
+    {
+      "id": "S6",
+      "title": "自检守护",
+      "components": [
+        "loader.watch",
+        "daemon.watch",
+        "watch.fresh"
+      ],
+      "requires": [
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "installer": "installers/安装自检守护.command",
+      "log": "watch",
+      "user_action": "双击 installers/安装自检守护.command",
+      "say": "装自检守护：每分钟检查三道墙和 Clash，有问题右上角弹通知。双击“安装自检守护.command”。"
+    },
+    {
+      "id": "S7",
+      "title": "IPv6 守护",
+      "components": [
+        "net.ipv6_off",
+        "daemon.ipv6",
+        "ipv6.script"
+      ],
+      "requires": [],
+      "installer": "installers/安装IPv6守护.command",
+      "log": "ipv6-guard",
+      "user_action": "双击 installers/安装IPv6守护.command",
+      "say": "把 IPv6 关掉并守住，防止绕过代理。双击“安装IPv6守护.command”。"
+    },
+    {
+      "id": "S8",
+      "title": "体检工具 claude-wall",
+      "components": [
+        "tool.claude_wall"
+      ],
+      "requires": [
+        "S5"
+      ],
+      "installer": "installers/安装体检工具.command",
+      "log": "claude-wall",
+      "user_action": "双击 installers/安装体检工具.command（不要 sudo）",
+      "say": "装体检命令，以后终端打 claude-wall status 就能看防护状态。双击“安装体检工具.command”，不用密码。"
+    },
+    {
+      "id": "S9",
+      "title": "Chrome 描述文件",
+      "components": [
+        "chrome.policy"
+      ],
+      "manual": [
+        "browser.webrtc"
+      ],
+      "requires": [],
+      "installer": "installers/Chrome策略.mobileconfig",
+      "user_action": "双击 installers/Chrome策略.mobileconfig → 系统设置 → 通用 → 设备管理 → 安装；然后 Chrome ⌘Q 重开，打开 chrome://policy 截图，打开 assets/webrtc-test.html 截图",
+      "say": "Chrome 要装一个描述文件来关 WebRTC 直连和浏览器自带 DoH。双击“Chrome策略.mobileconfig”，再到 系统设置 → 通用 → 设备管理 里点安装、输密码；装好后把 Chrome 完全退出再打开。"
+    },
+    {
+      "id": "S10",
+      "title": "系统时区（语言可选）",
+      "components": [
+        "sys.timezone"
+      ],
+      "info": [
+        "sys.language"
+      ],
+      "requires": [],
+      "installer": null,
+      "user_action": "系统设置 → 通用 → 日期与时间 → 关自动设置 → 选节点所在时区",
+      "say": "把系统时区改成节点所在的时区：系统设置 → 通用 → 日期与时间。语言顺序可改可不改，你定。"
+    },
+    {
+      "id": "S11",
+      "title": "实测：出口与 DNS 上游",
+      "components": [
+        "net.exit_ip",
+        "dns.upstream"
+      ],
+      "requires": [
+        "S1"
+      ],
+      "installer": null,
+      "ai_action": "python3 scripts/mirror_check.py --only net.exit_ip,dns.upstream",
+      "say": "我用公开的第三方检测点测一下出口和 DNS（不碰 Anthropic 的地址）。"
+    },
+    {
+      "id": "S12",
+      "title": "交付：全量对账 + ippure 四项",
+      "components": [],
+      "requires": [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8",
+        "S9",
+        "S10",
+        "S11"
+      ],
+      "installer": null,
+      "ai_action": "python3 scripts/mirror_check.py（合计 ❌=0 ❓=0）",
+      "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
+      "say": "全部清单项都过了。最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图（上半页和滚到底的分数），我按四项记录交付。"
     }
   ]
 }

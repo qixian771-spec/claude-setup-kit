@@ -32,7 +32,7 @@ pf_conf_add() { # pf_conf_add <anchor> <rules file>
     if grep -Fqx "$line" /etc/pf.conf; then echo "pf.conf 已有: $line"; return 0; fi
     bk="/etc/pf.conf.bak-mirror-$(date +%Y%m%d-%H%M%S)"
     cp -p /etc/pf.conf "$bk"
-    printf '\n# claude-mac-env-mirror\n%s\n' "$line" >> /etc/pf.conf
+    printf '\n# claude-setup-kit\n%s\n' "$line" >> /etc/pf.conf
     if ! pfctl -n -f /etc/pf.conf >/dev/null 2>&1; then
         cp -p "$bk" /etc/pf.conf; echo "pf.conf 语法检查失败，已恢复备份 $bk" >&2; exit 73
     fi

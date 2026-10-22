@@ -28,7 +28,7 @@ def frontmatter(text):
 def main():
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
     meta = frontmatter(skill)
-    require(meta.get("name") == "claude-mac-env-mirror", "skill name 不对")
+    require(meta.get("name") == "claude-setup-kit", "skill name 不对")
     require(0 < len(meta.get("description", "")) <= 1024, "description 缺失或超过 1024 字符")
     require(meta.get("license") == "MIT", "license 应为 MIT")
     require(set(meta) <= {"name", "description", "license"}, "frontmatter 有未知键")
@@ -51,9 +51,22 @@ def main():
             require((ROOT / rel).is_file(), "%s 的下一步指向不存在的 %s" % (comp["id"], rel))
     for launcher in (ROOT / "installers").glob("安装*.command"):
         require(launcher.name in runbook, "手册没有提到 %s" % launcher.name)
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import next_step  # validates steps ↔ components consistency
+    steps = next_step.load_manifest(ROOT / "manifest.json")["steps"]
+    appendix = runbook.split("## 附录 B", 1)[1]
+    for step in steps:
+        require("| %s |" % step["id"] in appendix, "附录 B 缺步骤 %s" % step["id"])
+        for cid in step.get("components", []) + step.get("manual", []) + step.get("info", []):
+            require("`%s`" % cid in appendix, "附录 B 缺组件 %s" % cid)
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    require("发给 AI 的一段话" in readme and "START.md" in readme, "README 必须有“发给 AI 的一段话”并指向 START.md")
+    start = (ROOT / "START.md").read_text(encoding="utf-8")
+    for needle in ("vps-node-rebuild-3xui", "claude-client-full-reset", "next_step.py", "ippure"):
+        require(needle in start, "START.md 缺 %s" % needle)
     ui = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
-    require("$claude-mac-env-mirror" in ui, "agents/openai.yaml 的 default_prompt 必须点名 skill")
-    for name in ("LICENSE", ".gitignore", ".github/workflows/validate.yml", "manifest.json", "assets/webrtc-test.html",
+    require("$claude-setup-kit" in ui, "agents/openai.yaml 的 default_prompt 必须点名 skill")
+    for name in ("LICENSE", ".gitignore", "START.md", ".github/workflows/validate.yml", "manifest.json", "assets/webrtc-test.html",
                  "installers/Chrome策略.mobileconfig", "templates/clash-profile.template.yaml", "templates/clash-profile.script.js"):
         require((ROOT / name).is_file(), "缺少文件 %s" % name)
 

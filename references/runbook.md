@@ -190,3 +190,4 @@
 | `chrome.policy` `browser.webrtc` | S9 | `Chrome策略.mobileconfig` + `assets/webrtc-test.html` |
 | `sys.timezone` `sys.language` | S10 | 系统设置（用户） |
 | `net.exit_ip` `dns.upstream` | S11 | `mirror_check --only net.exit_ip,dns.upstream` + ippure |
+| —（全部步骤） | S12 | `mirror_check` 全量 ❌=0 ❓=0 + ippure 两张截图 |

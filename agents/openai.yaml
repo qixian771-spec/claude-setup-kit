@@ -1,4 +1,4 @@
 interface:
   display_name: "Claude Mac 环境镜像与对账"
   short_description: "按清单把 Mac 配成参考机并逐项只读对账，ippure 验收"
-  default_prompt: "使用 $claude-mac-env-mirror 先只读对账本机 Claude 网络与浏览器环境，列出每个组件的 ✅/❌ 与下一步，不安装任何东西。"
+  default_prompt: "使用 $claude-setup-kit 先只读对账本机 Claude 网络与浏览器环境，列出每个组件的 ✅/❌ 与下一步，不安装任何东西。"

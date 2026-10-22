@@ -9,7 +9,7 @@
 
 ## GitHub CI（2026-10-22）
 
-- 仓库：<https://github.com/qixian771-spec/claude-mac-env-mirror>（公开）。
-- `699c2c5`：[run 39874114255](https://github.com/qixian771-spec/claude-mac-env-mirror/actions/runs/39874114255) 三个 job 全部通过：ubuntu 3.9 / 3.12 与 macos-14 3.12 的 check.py、redact_check、81 项测试；macOS 原生只读 smoke（mirror_check 在空 runner 上 exit 1 不崩、7 个组件渲染、`pfctl -n`、`plutil -lint`）。
+- 仓库：<https://github.com/qixian771-spec/claude-setup-kit>（公开）。
+- `699c2c5`：[run 39874114255](https://github.com/qixian771-spec/claude-setup-kit/actions/runs/39874114255) 三个 job 全部通过：ubuntu 3.9 / 3.12 与 macos-14 3.12 的 check.py、redact_check、81 项测试；macOS 原生只读 smoke（mirror_check 在空 runner 上 exit 1 不崩、7 个组件渲染、`pfctl -n`、`plutil -lint`）。
 - 之前三轮失败均为 runner 环境差异（无 uid 501、bash -e 中止、无 Wi-Fi 服务），逐一修正，见 docs/release-tasks.md。
 - vps-node-rebuild-3xui `ddde001`（macos-leak-guard.md 改为对照与链接）：run 39873953681 四个 job 全部通过。

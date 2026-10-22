@@ -1,4 +1,4 @@
-# claude-mac-env-mirror — Clash Verge 本地配置模板（来自参考机 2026-10-22，节点全部换成占位符）
+# claude-setup-kit — Clash Verge 本地配置模板（来自参考机 2026-10-22，节点全部换成占位符）
 # 渲染：python3 scripts/render.py --component clash --nodes <你的节点参数.json>；或手工把双花括号占位符换成真实值。
 # 导入 Clash Verge 后，把 templates/clash-profile.script.js 绑定为该配置的“脚本”（它写 DNS 并前置 STUN REJECT）。
 # 不要给 {{EXIT_GROUP}} 分组加 DIRECT；国内走 GEOSITE/GEOIP CN DIRECT 由 rules 决定。

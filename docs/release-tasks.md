@@ -1,4 +1,4 @@
-# 交付记录：claude-mac-env-mirror 0.1.0
+# 交付记录：claude-setup-kit 0.1.0
 
 方案与逐卡验收（含证据）在参考机的研究目录 `research/claude-env-mirror-2026-10-22/方案与任务卡.md`；本文是仓库内的摘要。
 
