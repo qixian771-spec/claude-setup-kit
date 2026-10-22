@@ -76,7 +76,7 @@ class LauncherTests(unittest.TestCase):
             first_write = min(i for i in (text.find(tok) for tok in ("install -", "launchctl bootstrap", "cp ", "networksetup -set")) if i >= 0)
             self.assertLess(refuse, first_write, path.name)
             self.assertIn("set -eu", text)
-            self.assertNotIn("|| true\n", text.replace("2>/dev/null || true", ""), path.name)
+            self.assertNotIn("|| true", text, path.name)
 
 
 if __name__ == "__main__":

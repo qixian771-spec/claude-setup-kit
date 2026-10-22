@@ -1,0 +1,40 @@
+name: Validate skill package
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: '3.9'
+          - os: ubuntu-24.04
+            python: '3.12'
+          - os: macos-14
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python tools/check.py
+      - run: python tools/redact_check.py
+      - run: python -m unittest discover -s tests -v
+      - name: Native read-only smoke (macOS only)
+        if: runner.os == 'macOS'
+        # The runner has none of the components: mirror_check must report ❌/❓ cleanly
+        # (exit 1 or 2), never crash; render must produce every system component.
+        run: |
+          python3 scripts/mirror_check.py --no-network --param exit_node=runner; code=$?
+          test "$code" -eq 1 -o "$code" -eq 2
+          for c in direct-wall net-wall leak-guard watch ipv6-guard updater claude-wall; do
+            python3 scripts/render.py --component "$c" --out "$RUNNER_TEMP/render-$c" >/dev/null
+          done
+          sudo pfctl -n -a test/mirror -f "$RUNNER_TEMP/render-leak-guard/system/pf.anchors/local.leak-guard"
+          plutil -lint installers/Chrome策略.mobileconfig "$RUNNER_TEMP"/render-*/system/LaunchDaemons/*.plist
