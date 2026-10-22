@@ -33,8 +33,11 @@ jobs:
         run: |
           code=0; python3 scripts/mirror_check.py --no-network --param exit_node=runner || code=$?
           test "$code" -eq 1 -o "$code" -eq 2
+          # The runner has no "Wi-Fi" service; render against its first hardware port.
+          svc=$(networksetup -listallhardwareports | awk -F': ' '/^Hardware Port:/{print $2; exit}')
+          echo "network service on runner: $svc"
           for c in direct-wall net-wall leak-guard watch ipv6-guard updater claude-wall; do
-            python3 scripts/render.py --component "$c" --out "$RUNNER_TEMP/render-$c" >/dev/null
+            python3 scripts/render.py --component "$c" --out "$RUNNER_TEMP/render-$c" --param "network_services=$svc" >/dev/null
           done
           sudo pfctl -n -a test/mirror -f "$RUNNER_TEMP/render-leak-guard/system/pf.anchors/local.leak-guard"
           plutil -lint installers/Chrome策略.mobileconfig "$RUNNER_TEMP"/render-*/system/LaunchDaemons/*.plist
