@@ -1,0 +1,107 @@
+#!/bin/sh
+# Cards N3 + N7: every 60 s, as root. Checks PF, the 010/011/020 anchors, the
+# Clash TUN, Clash mode and exit selection, and the address updater. Missing anchors are reloaded with the EXISTING
+# loaders (which only add rules and never disable PF); everything else only
+# alerts. Never writes rules itself, never disables PF, never hides failures.
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+[ "$(id -u)" = 0 ] || exit 70
+lib=/usr/local/libexec/net-guard-watch-lib.sh
+[ -f "$lib" ] && [ ! -L "$lib" ] || exit 71
+. "$lib"
+dir=/var/db/NetGuardWatch
+if [ ! -d "$dir" ]; then (umask 077; mkdir "$dir"); fi
+[ ! -L "$dir" ] && [ "$(stat -f '%u:%Lp' "$dir")" = '0:700' ] || exit 72
+now=$(date -u '+%s')
+stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+state=OK
+notes=''
+note() { notes="${notes:+$notes；}$1"; }
+raise() { case "$state:$1" in OK:*|WARN:REPAIRED|WARN:FAILED|REPAIRED:FAILED) state=$1 ;; esac; }
+
+has_label() { pfctl -a "$1" -sr | grep -F "label \"$2\"" >/dev/null; }
+anchor_ok() {
+    case "$1" in
+        wall) has_label com.apple/010.local.claude-direct-wall claude-wall-ipv4 &&
+              has_label com.apple/010.local.claude-direct-wall claude-wall-ipv6 ;;
+        leak) has_label com.apple/020.local.leak-guard leak-guard-dns &&
+              has_label com.apple/020.local.leak-guard leak-guard-user-public ;;
+        nets) has_label com.apple/011.local.claude-net-wall claude-net-wall-ipv4 &&
+              has_label com.apple/011.local.claude-net-wall claude-net-wall-ipv6 ;;
+    esac
+}
+
+if ! pfctl -s info | grep -F 'Status: Enabled' >/dev/null; then
+    raise FAILED; note 'PF 未启用：所有防护规则都不生效（守护按方案不自动开启 PF）'
+else
+    for part in wall nets leak; do
+        anchor_ok "$part" && continue
+        case "$part" in
+            wall) loader=/usr/local/libexec/claude-direct-wall; name='Claude 直连墙(010)' ;;
+            nets) loader=/usr/local/libexec/claude-net-wall; name='Anthropic 整段墙(011)' ;;
+            leak) loader=/usr/local/libexec/leak-guard-loader; name='leak-guard(020)' ;;
+        esac
+        status=0
+        "$loader" >>"$dir/repair.log" 2>&1 || status=$?
+        if [ "$status" -eq 0 ] && anchor_ok "$part"; then
+            raise REPAIRED; note "$name 规则缺失，已用现有装载器重装"
+        else
+            raise FAILED; note "$name 规则缺失，重装失败（装载器退出码 $status）"
+        fi
+    done
+fi
+
+if ! ifconfig {{TUN}} 2>&1 | grep -F 'inet {{TUN_INET4}} ' >/dev/null; then
+    raise WARN; note 'Clash TUN（{{TUN}} / {{TUN_INET4}}）不在：公网会被防护拦截而断网，请检查 Clash'
+fi
+
+# Clash mode and exit: read-only queries on the local control socket.
+clash_query() {
+    curl -sS --max-time 5 --unix-socket "$CLASH_SOCKET" "http://localhost$1"
+}
+if [ -S "$CLASH_SOCKET" ]; then
+    if configs=$(clash_query /configs); then
+        mode=$(clash_mode "$configs")
+        [ "$mode" = rule ] || { raise WARN; note "Clash 不是“规则”模式（当前: $mode）：共用 CDN 上的 Claude 下载/功能开关会直连"; }
+    else
+        raise WARN; note 'Clash 控制接口查询失败，无法确认模式'
+    fi
+    if group=$(clash_query '/proxies/{{EXIT_GROUP_URLENC}}'); then
+        exit_now=$(clash_exit "$group")
+        [ "$exit_now" = "$EXPECTED_EXIT" ] || { raise WARN; note "{{EXIT_GROUP}}不是 $EXPECTED_EXIT（当前: $exit_now）"; }
+    else
+        raise WARN; note 'Clash 控制接口查询失败，无法确认出口'
+    fi
+else
+    raise WARN; note 'Clash 控制接口不存在（Clash 没在运行？）'
+fi
+
+updater='{{HOME}}/Library/Application Support/ClaudeDirectWallUpdater/stdout.log'
+if [ -f "$updater" ]; then
+    age=$(applied_age "$updater" "$now")
+    if [ "$age" = none ] || [ "$age" -gt 21600 ]; then
+        raise WARN; note 'Claude IP 更新器超过 6 小时没有成功更新'
+    fi
+else
+    raise WARN; note 'Claude IP 更新器日志不存在'
+fi
+
+message=${notes:-全部正常}
+previous=''
+[ ! -f "$dir/last" ] || previous=$(cut -f2,3 "$dir/last")
+last_notify=0
+[ ! -f "$dir/last-notify" ] || last_notify=$(cat "$dir/last-notify")
+printf '%s\t%s\t%s\n' "$stamp" "$state" "$message" > "$dir/last.tmp"
+mv "$dir/last.tmp" "$dir/last"
+printf '%s\t%s\t%s\n' "$stamp" "$state" "$message" >> "$dir/history.log"
+
+if [ "$(should_notify "$state" "$message" "$previous" "$last_notify" "$now")" = yes ]; then
+    console=$(stat -f '%u' /dev/console)
+    if [ "$console" != 0 ]; then
+        launchctl asuser "$console" osascript -e "display notification \"$message\" with title \"网络防护：$state\""
+        echo "$now" > "$dir/last-notify"
+    else
+        printf '%s\tno-console-user\n' "$stamp" >> "$dir/history.log"
+    fi
+fi

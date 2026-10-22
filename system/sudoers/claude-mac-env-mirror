@@ -1,0 +1,4 @@
+# claude-mac-env-mirror: let the desktop user run the Claude address updater and
+# claude-wall without a password. Only these commands; the updater never needs more.
+# Installed by installers/lib/install-updater.sh after `visudo -cf` succeeds.
+{{USER}} ALL=(root) NOPASSWD: /sbin/pfctl, /usr/bin/install -o root -g wheel -m 600 /etc/pf.anchors/local.claude-direct-wall *, /usr/bin/install -o root -g wheel -m 644 * /etc/pf.anchors/*, /bin/mv -f * /etc/pf.anchors/local.claude-direct-wall, /bin/mkdir -m 700 *, /bin/rmdir *, /usr/bin/test -f /var/db/NetGuardWatch/last, /bin/cat /var/db/NetGuardWatch/last, /usr/bin/awk * /var/db/NetGuardWatch/history.log

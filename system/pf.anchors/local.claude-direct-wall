@@ -1,0 +1,8 @@
+# Confirmed 2026-10-11 through two independent recursive DNS services.
+# Exact host addresses only; no CDN or vendor subnet expansion.
+table <claude_wall_targets> persist { 160.79.104.10, 2607:6bc0::10 }
+# Existing Mihomo TUN ingress is permitted without creating bypass states.
+# If Mihomo sends these destinations directly, the physical egress is blocked.
+pass out quick on {{TUN}} to <claude_wall_targets> no state label "claude-wall-tun"
+block drop out quick inet to <claude_wall_targets> label "claude-wall-ipv4"
+block drop out quick inet6 to <claude_wall_targets> label "claude-wall-ipv6"

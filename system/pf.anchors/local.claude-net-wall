@@ -1,0 +1,9 @@
+# Card N6: Anthropic-owned networks (RDAP 2026-10-22, Anthropic, PBC):
+#   160.79.104.0/21 and 2607:6bc0::/32. Every Claude service resolved to
+#   160.79.104.10 / 2607:6bc0::10 on both Cloudflare and Google DNS.
+# Through the Clash TUN these destinations pass; from any other interface
+# they are dropped. The exact-IP wall (anchor 010) and its updater stay as is.
+table <claude_wall_nets> const { 160.79.104.0/21, 2607:6bc0::/32 }
+pass out quick on {{TUN}} to <claude_wall_nets> no state label "claude-net-wall-tun"
+block drop out quick inet to <claude_wall_nets> label "claude-net-wall-ipv4"
+block drop out quick inet6 to <claude_wall_nets> label "claude-net-wall-ipv6"

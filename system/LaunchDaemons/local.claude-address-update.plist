@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GroupName</key>
+	<string>staff</string>
+	<key>Label</key>
+	<string>local.claude-address-update</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>-I</string>
+		<string>-S</string>
+		<string>-B</string>
+		<string>/Library/Application Support/ClaudeDirectWallUpdater/runner.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>{{HOME}}/Library/Application Support/ClaudeDirectWallUpdater/stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>{{HOME}}/Library/Application Support/ClaudeDirectWallUpdater/stdout.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>15</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>30</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>45</integer>
+		</dict>
+	</array>
+	<key>Umask</key>
+	<integer>63</integer>
+	<key>UserName</key>
+	<string>{{USER}}</string>
+	<key>WorkingDirectory</key>
+	<string>/Library/Application Support/ClaudeDirectWallUpdater</string>
+</dict>
+</plist>

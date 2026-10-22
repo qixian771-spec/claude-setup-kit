@@ -452,7 +452,7 @@ def check_user_file(host, p, a):
 
 
 def check_launch_daemon(host, p, a):
-    label = a["label"]
+    label = p[a["label_param"]] if "label_param" in a else a["label"]
     plist = "/Library/LaunchDaemons/%s.plist" % label
     problem = _file_problem(host, plist, "644")
     if problem:
@@ -697,7 +697,12 @@ def main(argv=None, host=None):
     ap.add_argument("--param", action="append", default=[], help="覆盖 manifest params，如 exit_node=节点名")
     args = ap.parse_args(argv)
     manifest = load_manifest(args.manifest)
-    params = apply_overrides(dict(manifest["params"]), args.param)
+    params = dict(manifest["params"])
+    local = Path(args.manifest).parent / "mirror.params.json"
+    if local.exists():
+        # Per-machine overrides (git-ignored); same keys as manifest params.
+        params = apply_overrides(params, ["%s=%s" % (k, v) for k, v in json.loads(local.read_text(encoding="utf-8")).items()])
+    params = apply_overrides(params, args.param)
     comps = manifest["components"]
     if args.only:
         wanted = set(args.only.split(","))

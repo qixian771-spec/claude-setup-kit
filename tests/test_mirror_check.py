@@ -5,7 +5,9 @@ import io
 import json
 import plistlib
 import re
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,7 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import mirror_check as mc  # noqa: E402
 
-MANIFEST = str(ROOT / "manifest.json")
+# A private copy: the repo root may hold a git-ignored mirror.params.json with
+# per-machine overrides, and the fixtures must see the manifest defaults only.
+_TMP = tempfile.TemporaryDirectory(prefix="mirror-manifest-")
+MANIFEST = str(Path(_TMP.name) / "manifest.json")
+shutil.copy(ROOT / "manifest.json", MANIFEST)
 HOME = "/Users/tester"
 NOW = dt.datetime(2026, 10, 22, 22, 37, 0, tzinfo=dt.timezone.utc)
 GROUP_PATH = "/proxies/%E5%87%BA%E5%8F%A3%E9%80%89%E6%8B%A9"
@@ -110,14 +116,14 @@ def baseline_cmds():
         ("tail", "-n", "200", HOME + "/Library/Application Support/ClaudeDirectWallUpdater/stdout.log"): (0, UPDATER_LOG, ""),
         ("profiles", "-P"): (0, "_computerlevel[1] attribute: profileIdentifier: local.claude-mac-env-mirror.chrome\n", ""),
         (HOME + "/.local/bin/claude-wall", "status"): (0, "PF: 已启用，两处锚点均装载\nDNS: fake-ip 正常\n守护: 正常（2026-10-22T22:36:23Z）\n", ""),
-        ("curl", "-sS", "-m", "15", "https://www.cloudflare.com/cdn-cgi/trace"): (0, "ip=192.220.7.166\ncolo=LAX\nloc=US\n", ""),
-        dig("CH", server="1.1.1.1", name="whoami.cloudflare", rtype="TXT"): (0, '"192.220.7.166"\n', ""),
+        ("curl", "-sS", "-m", "15", "https://www.cloudflare.com/cdn-cgi/trace"): (0, "ip=203.0.113.166\ncolo=LAX\nloc=US\n", ""),
+        dig("CH", server="1.1.1.1", name="whoami.cloudflare", rtype="TXT"): (0, '"203.0.113.166"\n', ""),
         dig(server="ns1.google.com", name="o-o.myaddr.l.google.com", rtype="TXT"): (0, '"2400:cb00:445:1024::ac46:cd0a"\n', ""),
         ("readlink", "/etc/localtime"): (0, "/var/db/timezone/zoneinfo/America/Los_Angeles\n", ""),
         ("defaults", "read", "-g", "AppleLanguages"): (0, '(\n    "zh-Hans-US",\n    "zh-Hant-US",\n    "en-US"\n)\n', ""),
     }
     for label, code in (("local.claude-direct-wall", 0), ("local.claude-net-wall", 0), ("local.leak-guard", 0),
-                        ("local.claude-address-update", 1), ("local.net-guard-watch", 0), ("com.niuniu.ipv6-guard", 0)):
+                        ("local.claude-address-update", 1), ("local.net-guard-watch", 0), ("local.ipv6-guard", 0)):
         cmds[("launchctl", "print", "system/" + label)] = (0, "system/%s = {\n\tstate = not running\n\tlast exit code = %d\n}\n" % (label, code), "")
     return cmds
 
@@ -139,7 +145,7 @@ def baseline_stats():
         HOME + "/.local/bin/claude-wall": Stat(501, 0o100755),
     }
     for label in ("local.claude-direct-wall", "local.claude-net-wall", "local.leak-guard",
-                  "local.claude-address-update", "local.net-guard-watch", "com.niuniu.ipv6-guard"):
+                  "local.claude-address-update", "local.net-guard-watch", "local.ipv6-guard"):
         stats["/Library/LaunchDaemons/%s.plist" % label] = Stat(0, 0o100644)
     return stats
 
@@ -453,13 +459,13 @@ class NetworkLayerTests(unittest.TestCase):
         _, items, _ = run_json(host, "--only", "net.ipv6_off")
         self.assertIn("IPv6=Automatic", items["net.ipv6_off"]["evidence"])
         host = FakeHost()
-        host.cmds[("ifconfig", "en0")] = (0, "\tinet6 fe80::1%en0\n\tinet6 2400:1234::5 prefixlen 64\n", "")
+        host.cmds[("ifconfig", "en0")] = (0, "\tinet6 fe80::1%en0\n\tinet6 2400:1234::5 prefixlen 64\n", "")  # redact-allow: deliberate sample
         _, items, _ = run_json(host, "--only", "net.ipv6_off")
-        self.assertIn("2400:1234::5", items["net.ipv6_off"]["evidence"])
+        self.assertIn("2400:1234::5", items["net.ipv6_off"]["evidence"])  # redact-allow: deliberate sample
 
     def test_exit_in_forbidden_country(self):
         host = FakeHost()
-        host.cmds[("curl", "-sS", "-m", "15", "https://www.cloudflare.com/cdn-cgi/trace")] = (0, "ip=1.2.3.4\ncolo=SHA\nloc=CN\n", "")
+        host.cmds[("curl", "-sS", "-m", "15", "https://www.cloudflare.com/cdn-cgi/trace")] = (0, "ip=198.51.100.4\ncolo=SHA\nloc=CN\n", "")
         _, items, _ = run_json(host, "--only", "net.exit_ip")
         self.assertEqual(items["net.exit_ip"]["status"], mc.FAIL)
 
@@ -472,7 +478,7 @@ class NetworkLayerTests(unittest.TestCase):
 
     def test_dns_upstream_mismatch_or_foreign_resolver(self):
         host = FakeHost()
-        host.cmds[dig("CH", server="1.1.1.1", name="whoami.cloudflare", rtype="TXT")] = (0, '"5.6.7.8"\n', "")
+        host.cmds[dig("CH", server="1.1.1.1", name="whoami.cloudflare", rtype="TXT")] = (0, '"198.51.100.8"\n', "")
         _, items, _ = run_json(host, "--only", "dns.upstream")
         self.assertIn("≠ HTTPS 出口", items["dns.upstream"]["evidence"])
         host = FakeHost()
@@ -557,7 +563,7 @@ class DaemonTests(unittest.TestCase):
 
     def test_plist_missing(self):
         host = FakeHost()
-        del host.stats["/Library/LaunchDaemons/com.niuniu.ipv6-guard.plist"]
+        del host.stats["/Library/LaunchDaemons/local.ipv6-guard.plist"]
         _, items, _ = run_json(host, "--only", "daemon.ipv6")
         self.assertIn("不存在", items["daemon.ipv6"]["evidence"])
 

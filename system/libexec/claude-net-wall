@@ -1,0 +1,31 @@
+#!/bin/sh
+# Card N6 loader (modelled on /usr/local/libexec/claude-direct-wall).
+# Root-only. Loads anchor com.apple/011.local.claude-net-wall from a fixed,
+# root-owned rules file, then kills existing states to the networks so no
+# established direct connection survives. Never disables PF, never removes
+# rules on failure.
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+[ "$(id -u)" = 0 ] || exit 70
+[ "$#" = 0 ] || exit 64
+anchor='com.apple/011.local.claude-net-wall'
+rules='/etc/pf.anchors/local.claude-net-wall'
+[ -f "$rules" ] && [ ! -L "$rules" ] || exit 71
+[ "$(stat -f '%u:%Lp' "$rules")" = '0:644' ] || exit 72
+pfctl -sr | grep -F 'anchor "com.apple/*"' >/dev/null || exit 73
+pfctl -n -a "$anchor" -f "$rules"
+pfctl -a "$anchor" -f "$rules"
+pfctl -s info | grep -F 'Status: Enabled' >/dev/null || exit 76
+pfctl -a "$anchor" -sr | grep -F 'label "claude-net-wall-ipv4"' >/dev/null || exit 77
+pfctl -a "$anchor" -sr | grep -F 'label "claude-net-wall-ipv6"' >/dev/null || exit 78
+# Query failure or an empty table is an error, never a reason to remove rules.
+nets=$(pfctl -a "$anchor" -t claude_wall_nets -T show)
+[ -n "$nets" ] || exit 79
+printf '%s\n' "$nets" | while read -r net; do
+    [ -n "$net" ] || exit 79
+    case "$net" in
+        *:*) pfctl -k ::/0 -k "$net" ;;
+        *)   pfctl -k 0.0.0.0/0 -k "$net" ;;
+    esac
+done

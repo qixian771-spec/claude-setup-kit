@@ -1,0 +1,266 @@
+#!/bin/sh
+# claude-wall — PF 封锁墙计数基线与增量审计
+# 用途：把「撞墙包数」从一次性快照变成可持续比对，避免历史污染影响判断。
+# 设计：严格模式，任何一步失败都明确退出，不静默兜底。
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+# bash 3.2 (/bin/sh) mis-parses $name followed by a multibyte char in UTF-8 locales.
+LC_ALL=C
+export LC_ALL
+
+ANCHOR_WALL='com.apple/010.local.claude-direct-wall'
+ANCHOR_LEAK='com.apple/020.local.leak-guard'
+STATE_DIR="${HOME}/.local/state/claude-wall"
+BASELINE="${STATE_DIR}/baseline.tsv"
+# Written every 60 s by the root daemon local.net-guard-watch (card N3).
+WATCH_DIR='/var/db/NetGuardWatch'
+
+if [ "$(id -u)" = 0 ]; then
+	SUDO=''
+else
+	SUDO='sudo -n'
+fi
+
+usage() {
+	echo "用法: claude-wall [show|all|baseline|snapshot|status|watch]"
+	echo "  (无参数)    只看 block 规则与 TUN 诊断项的增量"
+	echo "  all         显示全部规则（含 pass 类）"
+	echo "  baseline    以当前计数重置基线（吸收历史污染）"
+	echo "  snapshot    只输出原始快照 TSV"
+	echo "  status      只做防护状态体检，不算增量（含自检守护最近一次结果）"
+	echo "  watch       自检守护最近一次结果与 24 小时内的异常记录"
+	echo
+	echo "退出码: 0 干净 / 1 Claude 撞墙 / 2 防护未武装 / 3 DNS 断裂 / 4 fake-ip 失效 / 5 其它进程被拦 / 6 自检守护报告异常"
+	exit 64
+}
+
+require_root() {
+	if ! $SUDO pfctl -s info >/dev/null 2>&1; then
+		echo "错误: 需要 root 读 pfctl，且 sudo -n 不可用" >&2
+		exit 70
+	fi
+}
+
+# 输出 anchor<TAB>rule<TAB>packets
+snapshot() {
+	for a in "$ANCHOR_WALL" "$ANCHOR_LEAK"; do
+		$SUDO pfctl -a "$a" -vsr 2>/dev/null | /usr/bin/awk -v a="$a" '
+			/^[ \t]*\[/ {
+				if (rule != "" && match($0, /Packets:[ \t]*[0-9]+/)) {
+					p = substr($0, RSTART, RLENGTH)
+					gsub(/[^0-9]/, "", p)
+					printf "%s\t%s\t%s\n", a, rule, p
+					rule = ""
+				}
+				next
+			}
+			{ rule = $0 }
+		'
+	done
+}
+
+check_armed() {
+	status=$($SUDO pfctl -s info 2>/dev/null | /usr/bin/grep -c 'Status: Enabled')
+	if [ "$status" != 1 ]; then
+		echo "警报: PF 未启用" >&2
+		return 2
+	fi
+	for a in "$ANCHOR_WALL" "$ANCHOR_LEAK"; do
+		n=$($SUDO pfctl -a "$a" -sr 2>/dev/null | /usr/bin/grep -c . )
+		if [ "$n" -lt 1 ]; then
+			echo "警报: 锚点未装载 $a" >&2
+			return 2
+		fi
+	done
+	$SUDO pfctl -a "$ANCHOR_WALL" -sr 2>/dev/null | /usr/bin/grep -q 'label "claude-wall-ipv4"' || {
+		echo "警报: claude-wall-ipv4 规则缺失" >&2
+		return 2
+	}
+	return 0
+}
+
+check_dns() {
+	res=$(/usr/bin/dig +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1)
+	if [ -z "$res" ]; then
+		echo "警报: api.anthropic.com 无解析（DNS 链断裂）" >&2
+		return 3
+	fi
+	case "$res" in
+		198.18.*) ;;
+		*)
+			echo "警报: api.anthropic.com 解析到真实地址 $res —— fake-ip 已失效" >&2
+			return 4
+			;;
+	esac
+	return 0
+}
+
+cmd_baseline() {
+	if [ ! -d "$STATE_DIR" ]; then
+		(umask 077; /bin/mkdir -p "$STATE_DIR")
+	fi
+	ts=$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')
+	{
+		printf '# baseline %s\n' "$ts"
+		snapshot
+	} >"$BASELINE.tmp"
+	/bin/mv "$BASELINE.tmp" "$BASELINE"
+	echo "基线已重置: $BASELINE"
+	echo "时间戳: $ts"
+	/usr/bin/grep -v '^#' "$BASELINE" | /usr/bin/wc -l | /usr/bin/awk '{print "已记录规则数: "$1}'
+}
+
+cmd_show() {
+	showall="${1:-0}"
+	require_root
+	rc=0
+	awk_exit=0
+	check_armed || rc=2
+	cur="$STATE_DIR/current.tsv"
+	snapshot >"$cur"
+	if [ ! -f "$BASELINE" ]; then
+		echo "尚无基线，请先执行: claude-wall baseline" >&2
+		exit 65
+	fi
+	echo "当前时间: $(/bin/date '+%Y-%m-%d %H:%M:%S %Z')"
+	echo "基线时间: $(/usr/bin/head -1 "$BASELINE" | /usr/bin/sed 's/^# baseline //')"
+	echo
+	/usr/bin/awk -F'\t' -v showall="$showall" '
+		FNR==NR {
+			if ($0 ~ /^#/) next
+			base[$2] = $3 + 0
+			next
+		}
+		{
+			key = $2
+			cur = $3 + 0
+			b = (key in base) ? base[key] : 0
+			d = cur - b
+			lab = key
+			if (match(lab, /label "[^"]+"/) > 0) lab = substr(lab, RSTART + 7, RLENGTH - 8)
+			isblock = (key ~ /block drop/)
+			isdiag = (lab == "claude-wall-tun")
+			if (showall != 1 && !isblock && !isdiag) next
+			if (!(lab in seen)) { seen[lab] = 1; order[++n] = lab }
+			cursum[lab] += cur
+			dsum[lab] += d
+			if (isblock) {
+				if (lab ~ /^claude-wall/) cw += d
+				else lg += d
+			}
+		}
+		END {
+			printf "%-24s %14s %12s\n", "规则标签", "当前包数", "增量"
+			printf "%-24s %14s %12s\n", "------------------------", "--------------", "------------"
+			for (i = 1; i <= n; i++) {
+				l = order[i]
+				if (dsum[l] > 0) printf "%-24s %14d %12s\n", l, cursum[l], "+" dsum[l]
+				else printf "%-24s %14d %12s\n", l, cursum[l], dsum[l]
+			}
+			printf "\n"
+			if (cw > 0) printf "Claude 撞墙增量: +%d 包  <<< 需要立刻排查\n", cw
+			else printf "Claude 撞墙增量: 0 包\n"
+			if (lg > 0) printf "其它进程外联拦截: +%d 包（非 Anthropic 目标，仅记录）\n", lg
+			else printf "其它进程外联拦截: 0 包\n"
+		}
+	' "$BASELINE" "$cur"
+	/usr/bin/awk -F'\t' '
+		FNR==NR { if ($0 ~ /^#/) next; base[$2] = $3 + 0; next }
+		{
+			key = $2
+			cur = $3 + 0
+			d = cur - ((key in base) ? base[key] : 0)
+			if (key !~ /block drop/) next
+			lab = key
+			if (match(lab, /label "[^"]+"/) > 0) lab = substr(lab, RSTART + 7, RLENGTH - 8)
+			if (lab ~ /^claude-wall/) cw += d
+			else lg += d
+		}
+		END { if (cw > 0) exit 1; if (lg > 0) exit 5; exit 0 }
+	' "$BASELINE" "$cur" || awk_exit=$?
+	if [ "$awk_exit" = 1 ]; then
+		rc=1
+	elif [ "$rc" = 0 ] && [ "$awk_exit" = 5 ]; then
+		rc=5
+	fi
+	echo
+	if check_dns; then
+		echo "DNS: api.anthropic.com → $(/usr/bin/dig +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1) (fake-ip 正常)"
+	else
+		dns_rc=$?
+		[ "$rc" = 0 ] && rc=$dns_rc
+	fi
+	exit "$rc"
+}
+
+cmd_snapshot() {
+	require_root
+	snapshot
+}
+
+# Latest result of the watch daemon. Returns 6 when it is missing, stale
+# (no run for 3 minutes) or anything other than OK.
+check_watch() {
+	if ! $SUDO test -f "$WATCH_DIR/last"; then
+		echo "守护: 未安装或还没有结果（$WATCH_DIR/last）"
+		return 6
+	fi
+	line=$($SUDO cat "$WATCH_DIR/last")
+	ts=$(printf '%s' "$line" | cut -f1)
+	st=$(printf '%s' "$line" | cut -f2)
+	msg=$(printf '%s' "$line" | cut -f3)
+	age=$(( $(date -u '+%s') - $(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$ts" '+%s') ))
+	if [ "$age" -gt 180 ]; then
+		echo "守护: 最近一次结果是 ${age} 秒前（${ts}），守护可能没在运行"
+		return 6
+	fi
+	if [ "$st" = OK ]; then
+		echo "守护: 正常（${ts}）"
+		return 0
+	fi
+	echo "守护: ${st}（${ts}）$msg"
+	return 6
+}
+
+cmd_watch() {
+	require_root
+	rc=0
+	check_watch || rc=$?
+	since=$(date -u -v-24H '+%Y-%m-%dT%H:%M:%SZ')
+	echo "24 小时内异常次数（$since 起）:"
+	$SUDO awk -F'\t' -v since="$since" '$1 >= since && $2 != "OK" && $2 != "" {n[$2]++} END {for (k in n) print "  " k ": " n[k]; if (!length(n)) print "  无"}' "$WATCH_DIR/history.log"
+	echo "最近 5 条异常记录:"
+	$SUDO awk -F'\t' '$2 != "OK"' "$WATCH_DIR/history.log" | tail -5 | /usr/bin/sed 's/^/  /'
+	exit "$rc"
+}
+
+cmd_status() {
+	require_root
+	rc=0
+	if check_armed; then
+		echo "PF: 已启用，两处锚点均装载"
+	else
+		rc=2
+	fi
+	echo "目标表:"
+	$SUDO pfctl -a "$ANCHOR_WALL" -t claude_wall_targets -T show 2>/dev/null | /usr/bin/sed 's/^/  /'
+	if check_dns; then
+		echo "DNS: fake-ip 正常"
+	else
+		rc=$?
+	fi
+	# Lower priority than the original codes: 6 only when nothing else is wrong.
+	if check_watch; then :; else w=$?; [ "$rc" -ne 0 ] || rc=$w; fi
+	exit "$rc"
+}
+
+case "${1:-show}" in
+	baseline) cmd_baseline ;;
+	show)     cmd_show 0 ;;
+	all)      cmd_show 1 ;;
+	snapshot) cmd_snapshot ;;
+	status)   cmd_status ;;
+	watch)    cmd_watch ;;
+	*)        usage ;;
+esac

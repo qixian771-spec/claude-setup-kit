@@ -1,0 +1,10 @@
+table <leak_guard_local> const { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4, 255.255.255.255, ::1, fc00::/7, fe80::/10, ff00::/8 }
+# Preserve TUN ingress; block direct DNS and common STUN/TURN on physical egress.
+pass out quick on lo0 no state label "leak-guard-local"
+pass out quick on {{TUN}} no state label "leak-guard-tun"
+block drop out quick proto { tcp udp } to any port { 53, 853 } label "leak-guard-dns"
+block drop out quick proto { tcp udp } to any port { 3478, 5349, 19302 } label "leak-guard-stun"
+
+# Current-user browsers/apps must enter the TUN or loopback proxy for public TCP/UDP.
+# The existing root-owned Mihomo core remains the public egress process.
+block drop out quick proto { tcp udp } from any to ! <leak_guard_local> user {{UID}} label "leak-guard-user-public"

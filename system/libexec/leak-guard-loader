@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+[ "$(id -u)" = 0 ] || exit 70
+anchor='com.apple/020.local.leak-guard'
+rules='/etc/pf.anchors/local.leak-guard'
+state='/var/run/local-leak-guard'
+[ -f "$rules" ] && [ ! -L "$rules" ] || exit 71
+[ "$(stat -f '%u:%Lp' "$rules")" = '0:644' ] || exit 72
+/sbin/pfctl -sr | grep -F 'anchor "com.apple/*"' >/dev/null || exit 73
+/sbin/pfctl -n -a "$anchor" -f "$rules"
+/sbin/pfctl -a "$anchor" -f "$rules"
+if [ ! -d "$state" ]; then (umask 077; mkdir "$state"); fi
+[ ! -L "$state" ] && [ "$(stat -f '%u:%Lp' "$state")" = '0:700' ] || exit 74
+if [ ! -e "$state/enable-reference" ]; then
+ [ ! -L "$state/enable-reference" ] || exit 75
+ (umask 077; /sbin/pfctl -E >"$state/enable-reference.tmp" 2>&1)
+ grep -E 'Token[[:space:]]*:[[:space:]]*[0-9]+' "$state/enable-reference.tmp" >/dev/null || exit 75
+ mv "$state/enable-reference.tmp" "$state/enable-reference"
+fi
+/sbin/pfctl -s info | grep -F 'Status: Enabled' >/dev/null || exit 76
+/sbin/pfctl -a "$anchor" -sr | grep -F 'label "leak-guard-dns"' >/dev/null || exit 77

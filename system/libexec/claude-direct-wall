@@ -1,0 +1,42 @@
+#!/bin/sh
+# Fixed, root-owned boot loader. Never disables PF or removes rules on failure.
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+[ "$(id -u)" = 0 ] || exit 70
+[ "$#" = 0 ] || exit 64
+anchor='com.apple/010.local.claude-direct-wall'
+rules='/etc/pf.anchors/local.claude-direct-wall'
+state='/var/run/claude-direct-wall'
+[ -f "$rules" ] && [ ! -L "$rules" ] || exit 71
+[ "$(stat -f '%u:%Lp' "$rules")" = '0:644' ] || exit 72
+pfctl -sr | grep -F 'anchor "com.apple/*"' >/dev/null || exit 73
+pfctl -n -a "$anchor" -f "$rules"
+pfctl -a "$anchor" -f "$rules"
+# Own an enable reference so another client's normal release cannot disable PF.
+if [ ! -d "$state" ]; then
+    (umask 077; mkdir "$state")
+fi
+[ ! -L "$state" ] && [ "$(stat -f '%u:%Lp' "$state")" = '0:700' ] || exit 74
+if [ ! -e "$state/enable-reference" ]; then
+    [ ! -L "$state/enable-reference" ] && [ ! -e "$state/enable-reference.tmp" ] && [ ! -L "$state/enable-reference.tmp" ] || exit 75
+    (umask 077; pfctl -E >"$state/enable-reference.tmp" 2>&1)
+    grep -E 'Token[[:space:]]*:[[:space:]]*[0-9]+' "$state/enable-reference.tmp" >/dev/null || exit 75
+    mv "$state/enable-reference.tmp" "$state/enable-reference"
+fi
+[ ! -L "$state/enable-reference" ] && [ "$(stat -f '%u:%Lp' "$state/enable-reference")" = '0:600' ] || exit 75
+grep -E 'Token[[:space:]]*:[[:space:]]*[0-9]+' "$state/enable-reference" >/dev/null || exit 75
+pfctl -s info | grep -F 'Status: Enabled' >/dev/null || exit 76
+pfctl -a "$anchor" -sr | grep -F 'label "claude-wall-ipv4"' >/dev/null || exit 77
+pfctl -a "$anchor" -sr | grep -F 'label "claude-wall-ipv6"' >/dev/null || exit 78
+# Enumerate the current table: additions must also lose pre-existing states.
+# Query failure or an empty table is an error, never a reason to remove rules.
+targets=$(pfctl -a "$anchor" -t claude_wall_targets -T show)
+[ -n "$targets" ] || exit 79
+printf '%s\n' "$targets" | while read -r target; do
+    [ -n "$target" ] || exit 79
+    case "$target" in
+        *:*) pfctl -k ::/0 -k "$target" ;;
+        *)   pfctl -k 0.0.0.0/0 -k "$target" ;;
+    esac
+done
