@@ -221,6 +221,9 @@ class FakeHost:
     def home(self):
         return Path(HOME)
 
+    def console_name(self):
+        return "tester"
+
     def now(self):
         return self._now
 

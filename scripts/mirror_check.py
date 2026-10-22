@@ -131,6 +131,9 @@ class Host:
     def home(self):
         return Path(pwd.getpwuid(self.console_uid()).pw_dir)
 
+    def console_name(self):
+        return pwd.getpwuid(self.console_uid()).pw_name
+
     def now(self):
         return dt.datetime.now(dt.timezone.utc)
 
@@ -518,7 +521,7 @@ def check_chrome_policy(host, p, a):
     if host.lstat(p["chrome_app"]) is None:
         return INFO, "未安装 Chrome（%s），跳过" % p["chrome_app"]
     want = p["chrome_policy"]
-    user = pwd.getpwuid(host.console_uid()).pw_name
+    user = host.console_name()
     for path in ("/Library/Managed Preferences/com.google.Chrome.plist",
                  "/Library/Managed Preferences/%s/com.google.Chrome.plist" % user):
         if host.lstat(path) is None:
