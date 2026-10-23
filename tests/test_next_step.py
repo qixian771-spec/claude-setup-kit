@@ -8,6 +8,9 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+import os
+
+os.environ.setdefault("CLAUDE_SETUP_KIT_PLATFORM", "darwin")  # the fixtures describe the macOS reference machine
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import next_step as ns  # noqa: E402
@@ -152,10 +155,15 @@ class WindowsStepTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_platform_key_falls_back_to_macos_tables(self):
-        with unittest.mock.patch.object(sys, "platform", "linux"):
-            self.assertEqual(ns.platform_key(), "darwin")
-        with unittest.mock.patch.object(sys, "platform", "win32"):
-            self.assertEqual(ns.platform_key(), "win32")
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("CLAUDE_SETUP_KIT_PLATFORM", None)
+            with unittest.mock.patch.object(sys, "platform", "linux"):
+                self.assertEqual(ns.platform_key(), "darwin")
+            with unittest.mock.patch.object(sys, "platform", "win32"):
+                self.assertEqual(ns.platform_key(), "win32")
+            os.environ["CLAUDE_SETUP_KIT_PLATFORM"] = "win32"
+            with unittest.mock.patch.object(sys, "platform", "darwin"):
+                self.assertEqual(ns.platform_key(), "win32")
 
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()

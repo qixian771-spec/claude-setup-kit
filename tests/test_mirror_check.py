@@ -11,6 +11,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import os
+
+os.environ.setdefault("CLAUDE_SETUP_KIT_PLATFORM", "darwin")  # the fixtures describe the macOS reference machine
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import mirror_check as mc  # noqa: E402
@@ -196,18 +199,30 @@ class FakeHost:
             raise mc.NeedSudo("需要 sudo: %s" % " ".join(argv))
         return self.run(argv, timeout)
 
+    # Paths built with pathlib on a Windows runner use "\\"; the fixture keys use "/".
+    @staticmethod
+    def _norm(path):
+        return str(path).replace("\\", "/")
+
+    def _lookup(self, table, path):
+        key = next((k for k in table if self._norm(k) == self._norm(path)), None)
+        return key
+
     def read_text(self, path):
-        if path not in self.files:
+        key = self._lookup(self.files, path)
+        if key is None:
             raise mc.HostError("读不到 %s" % path)
-        return self.files[path]
+        return self.files[key]
 
     def read_bytes(self, path):
-        if path not in self.bytes:
+        key = self._lookup(self.bytes, path)
+        if key is None:
             raise mc.HostError("读不到 %s" % path)
-        return self.bytes[path]
+        return self.bytes[key]
 
     def lstat(self, path):
-        return self.stats.get(path)
+        key = self._lookup(self.stats, path)
+        return self.stats.get(key) if key is not None else None
 
     def is_link(self, path):
         return path in self.links

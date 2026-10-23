@@ -11,6 +11,7 @@ could not be run or the manifest is inconsistent.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,10 @@ PASS, FAIL, UNKNOWN, INFO, MANUAL = "PASS", "FAIL", "UNKNOWN", "INFO", "MANUAL"
 
 def platform_key():
     # Only macOS and Windows have component tables; anything else (Linux CI runners) uses the macOS set.
+    # CLAUDE_SETUP_KIT_PLATFORM is for tests/CI only: it pins the tables to one platform.
+    forced = os.environ.get("CLAUDE_SETUP_KIT_PLATFORM")
+    if forced in ("darwin", "win32"):
+        return forced
     return "win32" if sys.platform.startswith("win") else "darwin"
 
 

@@ -62,7 +62,11 @@ class WinUser:
 
 
 def platform_key():
-    return "win32" if sys.platform.startswith("win") else sys.platform
+    # CLAUDE_SETUP_KIT_PLATFORM is for tests/CI only: it pins the component tables to one platform.
+    forced = os.environ.get("CLAUDE_SETUP_KIT_PLATFORM")
+    if forced in ("darwin", "win32"):
+        return forced
+    return "win32" if sys.platform.startswith("win") else "darwin"
 
 
 def powershell(script):

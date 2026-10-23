@@ -7,6 +7,9 @@ import sys
 import unittest
 from pathlib import Path
 
+import os
+
+os.environ.setdefault("CLAUDE_SETUP_KIT_PLATFORM", "darwin")  # the fixtures describe the macOS reference machine
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
 sys.path.insert(0, str(ROOT / "scripts"))
