@@ -28,4 +28,4 @@ Haiku 子代理只拿 README 的"发给 AI 的一段话"，在去掉卸载脚本
 
 - 局域网 Win10：`system-win` 全部 `.ps1` 用 PowerShell 解析器 0 错误；`py -3 scripts\render.py --component win-firewall|win-tasks|win-tools` 跑通（USER=qixia、SID、网卡 以太网、TUN=Meta、时区参数）；`Read-Params` + `Assert-Physical` 通过；渲染后的 `claude-wall.ps1 status` 只读运行：缺 8 条规则、Domain/Public 未启用、TUN 不在、DNS 无应答、守护未装 → exit 6。
 - 没有安装任何东西；Clash Verge 在该机上从未运行。
-- CI：windows-2022 job 三轮修正（Git bash、工具脚本 UTF-8 输出、测试夹具平台固定与路径分隔符），最终 run 见 Actions。
+- CI：windows-2022 job 经六轮 runner 差异修正（Git bash 而非 WSL、工具脚本 UTF-8 输出、测试夹具平台固定、路径与参数分隔符），[run 39880530946](https://github.com/qixian771-spec/claude-setup-kit/actions/runs/39880530946) 四个 job 全部通过，含 Windows 原生只读 smoke（mirror_check/next_step 退出码、三个 win-* 组件渲染、PowerShell 解析、claude-wall.ps1 只读运行）。
