@@ -59,7 +59,7 @@
 动作：👤 双击 `installers/安装Claude直连墙.command` → Terminal 里输入开机密码 → 等"安装结束"。
 读：`installers/logs/direct-wall-<时间>.log` 最后一行 `EXIT=0`，上面有 `[OK] Claude 直连墙（锚点 010）已装载` 和目标表两条地址。
 对账：`--only pf.enabled,pf.010,loader.010,daemon.010,pf.conf`（PF 项如需 sudo 见 G1）。
-停止：`EXIT=72` 已存在（先卸载再装，附录 A）；`EXIT=73` pf.conf 语法失败已自动恢复备份——把日志贴给用户，不要手改 pf.conf。
+停止：`EXIT=72` 已存在——先对账该组件：✅ 就不用装；❌ 停下报告用户，由用户决定要不要卸载重装（附录 A），AI 不自己卸；`EXIT=73` pf.conf 语法失败已自动恢复备份——把日志贴给用户，不要手改 pf.conf。
 
 ## S3 Anthropic 整段墙（011）
 
@@ -159,7 +159,7 @@
 | `dns.system` 是 114.114.114.114 | 看 `dns.local53`，✅ 就接受 | 去把系统 DNS 改成 1.1.1.1 |
 | 装 020 时 `EXIT=75` | 回 S1 把 TUN 开起来 | 改脚本跳过检查 |
 | 装 010 时 `EXIT=73` | 把日志贴出来，pf.conf 已自动恢复 | 手改 /etc/pf.conf |
-| `EXIT=72` 已存在 | 先对账该组件，✅ 就不用装；❌ 才卸载重装 | 直接覆盖 |
+| `EXIT=72` 已存在 | 先对账该组件，✅ 就不用装；❌ 停下报告，用户决定是否卸载重装 | 直接覆盖；AI 自己卸载 |
 | `watch.fresh` 是 WARN "出口选择不是 X" | 对照用户要的节点名改 `mirror.params.json`，或让用户在 GUI 选回 | 为了让它 OK 去切节点 |
 | `updater.fresh` ❌ 首轮 STOPPED | 等 15 分钟再对账；连续 6 小时 STOPPED 才算问题 | 删除旧目标表 |
 | `chrome.policy` ❌ 但 ippure WebRTC 显示未泄露 | 仍要装描述文件（现在只靠 PF 兜底） | 宣称 WebRTC 已处理 |

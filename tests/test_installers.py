@@ -132,3 +132,23 @@ class LauncherTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsLogNameTests(unittest.TestCase):
+    def test_steps_win_log_names_are_the_cmd_file_names(self):
+        # next_step prints installers\logs\<log>-*.log; every .cmd writes <its own name>-%RANDOM%.log, so the two
+        # must agree or the AI is sent to a log that does not exist (first rehearsal: win-watch vs 安装自检守护).
+        for step in MANIFEST["steps_win"]:
+            if step.get("log"):
+                self.assertTrue((ROOT / "installers" / "win" / (step["log"] + ".cmd")).is_file(), "%s → %s" % (step["id"], step["log"]))
+                cmd = (ROOT / "installers" / "win" / (step["log"] + ".cmd")).read_text(encoding="utf-8")
+                self.assertIn("logs\\%s-%%RANDOM%%.log" % step["log"], cmd, step["id"])
+
+
+class Ipv6UninstallGuardTests(unittest.TestCase):
+    def test_uninstaller_refuses_a_guard_installed_under_another_label(self):
+        text = (ROOT / "installers" / "lib" / "uninstall-ipv6-guard.sh").read_text(encoding="utf-8")
+        guard = text.index('[ -f "/Library/LaunchDaemons/$label.plist" ] ||')
+        self.assertLess(guard, text.index("rm -f"), "the existence check must come before any rm")
+        self.assertIn("exit 73", text)
+

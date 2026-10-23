@@ -846,8 +846,8 @@ def render(items, params, code, platform="darwin", note=None):
             lines.append("    下一步: %s" % i["next"])
     counts = {s: sum(1 for i in items if i["status"] == s) for s in MARK}
     lines.append("")
-    lines.append("合计: ✅ %d  ❌ %d  ❓ %d  ℹ️ %d  👉 %d  → exit %d" % (
-        counts[PASS], counts[FAIL], counts[UNKNOWN], counts[INFO], counts[MANUAL], code))
+    lines.append("合计: ✅ %d  ❌ %d  ❓ %d  ℹ️ %d  👉 %d  共 %d 项  → exit %d" % (
+        counts[PASS], counts[FAIL], counts[UNKNOWN], counts[INFO], counts[MANUAL], len(items), code))
     return "\n".join(lines)
 
 

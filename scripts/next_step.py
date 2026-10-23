@@ -20,7 +20,12 @@ ROOT = Path(__file__).resolve().parent.parent
 PASS, FAIL, UNKNOWN, INFO, MANUAL = "PASS", "FAIL", "UNKNOWN", "INFO", "MANUAL"
 
 
+_PLATFORM_OVERRIDE = None  # set by main() from --platform so the printed commands match the table
+
+
 def platform_key():
+    if _PLATFORM_OVERRIDE:
+        return _PLATFORM_OVERRIDE
     # Only macOS and Windows have component tables; anything else (Linux CI runners) uses the macOS set.
     # CLAUDE_SETUP_KIT_PLATFORM is for tests/CI only: it pins the tables to one platform.
     forced = os.environ.get("CLAUDE_SETUP_KIT_PLATFORM")
@@ -84,7 +89,7 @@ def decide(manifest, result):
                 return build(first, status, evidence, states, via=step["id"])
             return build(step, status, evidence, states)
     return {"step": None, "state": "all_passed", "exit": 0,
-            "ai_action": "python3 scripts/mirror_check.py（贴全量输出）",
+            "ai_action": ("py -3 scripts\\mirror_check.py" if platform_key() == "win32" else "python3 scripts/mirror_check.py") + "（贴全量输出）",
             "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
             "say": "清单全部通过。最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。",
             "doc": "references/ippure-acceptance.md"}
@@ -146,7 +151,7 @@ def render(out):
         needs_root = out["installer"].endswith(".command") and out["log"] != "claude-wall"
         lines.append("让用户双击: " + out["installer"]
                      + ("（会弹终端要开机密码，输入时不显示字符）" if needs_root else "")
-                     + ("（日志 installers/logs/%s-*.log，看最后 EXIT=）" % out["log"] if out.get("log") else ""))
+                     + (("（日志 installers\\logs\\%s-*.log，看最后 EXIT=）" if platform_key() == "win32" else "（日志 installers/logs/%s-*.log，看最后 EXIT=）") % out["log"] if out.get("log") else ""))
     if out.get("user_action"):
         lines.append("用户动作: " + out["user_action"])
     if out.get("say"):
@@ -170,6 +175,8 @@ def main(argv=None):
     ap.add_argument("--platform", choices=("darwin", "win32"), help="（测试/CI 用）")
     args = ap.parse_args(argv)
     try:
+        global _PLATFORM_OVERRIDE
+        _PLATFORM_OVERRIDE = args.platform
         platform = args.platform or platform_key()
         manifest = load_manifest(args.manifest, platform)
         if args.input:

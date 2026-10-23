@@ -18,7 +18,7 @@
 
 ## 推荐：一键安装 / 一键撤回（2026-10-23 实机验证）
 
-S2–S7 可以一次做完：👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
+S2–S7 可以一次做完，但**先问清三件事再让用户双击**：同意装防火墙规则（Clash 一关就断网）、同意解绑 IPv6 和写浏览器策略、时区要改成哪个（`mirror.params.json` 的 `timezone_win`，默认 `Pacific Standard Time`；不想改就先不要用一键，分步跳过 S7）。然后 👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
 
 撤回：👤 双击 `installers\win\一键撤回全部.cmd`：删规则、任务、策略值、体检工具，并照 `before.json` 把防火墙配置文件、时区、IPv6 改回去；守护历史与快照移到 `%USERPROFILE%\claude-setup-kit-uninstalled-<时间>`。Clash 的 TUN 由用户自己在 Clash Verge 里关。实机往返 14 项与安装前完全一致。
 
@@ -72,7 +72,7 @@ py -3 scripts\mirror_check.py --no-network
 ## S2 防火墙三套规则
 
 组件：`wf.enabled wf.011 wf.020`。前置：S1；`net.tun_iface` ✅；`clash_verge_service` 在运行。
-👤 双击 `installers\win\安装防火墙规则.cmd` → UAC 点"是"。读 `installers\logs\win-firewall-*.log`：`[OK] 防火墙规则已装（8 条…）`、`EXIT=0`。
+👤 双击 `installers\win\安装防火墙规则.cmd` → UAC 点"是"。读 `installers\logs\安装防火墙规则-*.log`：`[OK] 防火墙规则已装（8 条…）`、`EXIT=0`。
 对账：`--only wf.enabled,wf.011,wf.020`；再 `--only net.exit_ip,dns.upstream` 证明装墙后代理路径还通。
 停止：日志里 `已存在，拒绝覆盖` → 先对账，✅ 不用装；`Clash Verge 服务模式没有在运行` / `TUN 适配器 … 不在` → 回 S1；`找不到网卡` → `mirror.params.json` 的 `network_services` 改成 `网络连接` 里的名字。
 

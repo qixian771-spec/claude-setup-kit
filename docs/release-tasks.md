@@ -43,3 +43,13 @@
 | W7 实机修复 | 模板去掉 IP-ASN（新机器下载 ASN.mmdb 超时，整份配置验证失败）；REALITY 节点加 `support-x25519mlkem768`；住宅 socks5 `udp: false`；新组件 `clash.base_config`（Clash Verge 基础 `config.yaml` 带 dns/proxies/proxy-groups/rules 会覆盖任何订阅）；命名管道响应 chunked 解码；防火墙枚举按字符串比较；`mirror.params.json` 保留列表类型；`.cmd` 改 `-File` + 脚本自提权 + 日志（以前嵌套引号让 UAC 什么都没跑）；`一键安装全部.cmd` / `一键撤回全部.cmd`（装前快照、撤回按快照还原、读回校验）；Windows 手册加"实机踩过的坑" | 通过：一键安装 EXIT=0，Windows 全量对账 ✅23 ❌0；物理网卡直连 Anthropic 整段被墙、走 TUN 正常、局域网正常；WebRTC 与 ippure 用户口头确认通过（无截图）；一键撤回 EXIT=0，14 项与装前快照一致，TUN 关闭后直连上网正常；134 例 |
 
 仍为 ℹ️：Windows 上 Clash Verge 2.4.4 不改系统 DNS（保持路由器地址），DNS 走向由 TUN 劫持保证。
+
+## 0.2.2 陌生人演练（W8–W9，2026-10-23）
+
+做法：从 GitHub 干净克隆到临时目录，在 Mac（参考机）和 Windows 游戏机上只跑陌生人会跑的命令；再派一个弱模型（Haiku）扮演"收到链接的 AI"只读走 START.md，报回卡点。
+
+| 卡 | 内容 | 状态 |
+| --- | --- | --- |
+| W8 | 国内无代理连不上 GitHub（Win 关 TUN 后 clone 两次被重置、curl 15 秒超时）→ README 粘贴段、START 第 0 步、Windows 手册写明先开 Clash 系统代理 / 用别的设备 Download ZIP；Windows 网卡别名不存在时 `dns.system`/`net.ipv6_off` 直接列出现有网卡并指向 `mirror.params.json`（原来是一段 CIM 错误）；`check.py`/测试在 Windows 找 Git 自带的 bash（Git 不在 PATH 也找 Program Files，绝不用 System32 的 WSL 启动器），没有 Git Bash 时明说 SKIPPED；`dns.system` 文案改为实测结论 | 通过：`b8e2fac` run 39972813048 四 job success；Win 实跑三种 PATH 情况 136 例 OK |
+| W9 | Haiku 第一轮演练 64 分，核实后 14 条真问题：文档组件数 36/25 过期（实际 Mac 38 / Win 27 / 共 45）；对话模板写死项数；`mirror_check` 无参数文件时首行不提醒；START 没写 `next_step` 退出码 3 的含义、Windows 前置 Git/Python、`network_services`；steps_win S2 话术指向旧安装器；S7 话术两处不一致；✅ 证据不解释 114 DNS 与 updater 退出码 1；`render.py` 说明只写 Mac；一键装后 S3–S7 的关系、游戏机最终状态、claude-wall.ps1 执行策略、ALTQ 过滤未说明 | 通过：`cafccdc` run 39974014029 四 job success；137 例 |
+| W10 | Haiku 第二轮演练 58 分，核实后 13 条真问题。硬伤三条：Windows 一键安装改时区没征得同意 → START 必问时区、S2 话术列出一键会做的全部事、手册先问再双击；steps_win 的 `log` 字段（win-watch 等）与 .cmd 实际日志名不符 → 改成文件名并加测试；Mac `uninstall-ipv6-guard.sh` 不管 label 是否是自己装的都删脚本 → 没有自己 label 的 plist 就 EXIT=73 拒卸。其余：`next_step` 全过分支与日志路径按平台输出、`--platform` 同时决定打印的命令；`合计` 行加「共 N 项」；START 写明 mirror_check 的探测目标与 `sudo -n`、`ipv6_guard_label` 怎么发现、节点键名按协议、Windows 还要装 Clash Verge 服务模式、AGENTS.md 与本仓库规则的优先级；对话模板加 Windows 说明与 👤/👉 对应；EXIT=72 的处理三处统一为"对账，❌ 停下报告，AI 不自己卸" | 本提交；139 例 |
