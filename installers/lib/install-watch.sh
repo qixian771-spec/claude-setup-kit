@@ -2,6 +2,7 @@
 # Self-check daemon: every 60 s re-loads missing 010/011/020 rules with the existing loaders and warns about TUN/Clash/updater.
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
+assert_root_dir /usr/local/libexec  # before anything is written: a swappable program dir would defeat every root daemon
 watch=$(src system/libexec/net-guard-watch); lib=$(src system/libexec/net-guard-watch-lib.sh); plist=$(src system/LaunchDaemons/local.net-guard-watch.plist)
 refuse_existing /usr/local/libexec/net-guard-watch /usr/local/libexec/net-guard-watch-lib.sh /Library/LaunchDaemons/local.net-guard-watch.plist
 for l in claude-direct-wall claude-net-wall leak-guard-loader; do [ -x /usr/local/libexec/$l ] || { echo "先装好三堵墙（缺 /usr/local/libexec/${l}）" >&2; exit 73; }; done

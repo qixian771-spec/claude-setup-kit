@@ -2,6 +2,7 @@
 # Anchor 011: Anthropic's whole networks may only leave through the TUN (loaded by its own daemon).
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
+assert_root_dir /usr/local/libexec  # before anything is written: a swappable program dir would defeat every root daemon
 anchor=com.apple/011.local.claude-net-wall
 rules=$(src system/pf.anchors/local.claude-net-wall); loader=$(src system/libexec/claude-net-wall); plist=$(src system/LaunchDaemons/local.claude-net-wall.plist)
 refuse_existing /etc/pf.anchors/local.claude-net-wall /usr/local/libexec/claude-net-wall /Library/LaunchDaemons/local.claude-net-wall.plist

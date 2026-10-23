@@ -18,13 +18,16 @@ die() { echo "claude-pf-helper: $*" >&2; exit 64; }
 # Only the kit's own three anchors can be read.
 anchor_ok() { case "$1" in com.apple/010.local.claude-direct-wall|com.apple/011.local.claude-net-wall|com.apple/020.local.leak-guard) return 0;; esac; return 1; }
 name_ok() { case "$1" in ""|-*|*[!A-Za-z0-9_]*) return 1;; esac; return 0; }
-# Exact host addresses only: a dotted quad, or an IPv6 literal (hex and colons). No prefixes, no names.
+# Exact host addresses only (parsed by Python's ipaddress, same as the updater): no prefixes, no names, nothing that
+# pfctl would try to resolve, and never loopback / unspecified / multicast / link-local.
 ip_ok() {
-	case "$1" in
-		*.*.*.*) case "$1" in *[!0-9.]*) return 1;; esac; return 0;;
-		*:*) case "$1" in *[!0-9A-Fa-f:]*|*::*::*) return 1;; esac; return 0;;
-	esac
-	return 1
+	case "$1" in ""|-*|*[!0-9A-Fa-f.:]*) return 1;; esac
+	/usr/bin/python3 -I -c 'import ipaddress, sys
+try:
+    a = ipaddress.ip_address(sys.argv[1])
+except ValueError:
+    sys.exit(1)
+sys.exit(1 if (a.is_loopback or a.is_unspecified or a.is_multicast or a.is_link_local) else 0)' "$1" 2>/dev/null
 }
 
 cmd=${1:-}
@@ -59,8 +62,15 @@ case "$cmd" in
 		# Rewrite ONLY the table line of the live rules file with the given addresses; every other line (the rule
 		# body and comments) is copied unchanged, then validated, backed up, staged next to the file and renamed.
 		[ -f "$RULES" ] || die "${RULES} 不存在（先装 Claude 直连墙）"
+		# Additive only: every address already in the live table line must still be present.
+		old_list=$(sed -n "s/^table <${TABLE_010}> persist { \(.*\) }\$/\1/p" "$RULES" | head -1 | tr ',' ' ')
+		for o in $old_list; do
+			found=0; for ip; do [ "$ip" = "$o" ] && found=1; done
+			[ "$found" = 1 ] || die "只增不减：现有地址 ${o} 不在新列表里，不动"
+		done
 		list=""; for ip; do list="${list}${list:+, }${ip}"; done
-		tmp=$(mktemp /tmp/claude-pf-persist.XXXXXX)
+		tmp=$(mktemp /tmp/claude-pf-persist.XXXXXX); staging=""
+		trap 'rm -f "$tmp" ${staging:+"$staging"}' EXIT
 		n=0
 		while IFS= read -r line || [ -n "$line" ]; do
 			case "$line" in
@@ -73,8 +83,8 @@ case "$cmd" in
 		[ -d "$BACKUP_DIR" ] || mkdir -m 700 "$BACKUP_DIR"
 		install -o root -g wheel -m 600 "$RULES" "$BACKUP_DIR/rules-before-$(date +%Y%m%d-%H%M%S)-$$.pf"
 		staging=$(mktemp "$RULES.pending-XXXXXX")
-		install -o root -g wheel -m 644 "$tmp" "$staging"; rm -f "$tmp"
-		mv -f "$staging" "$RULES"
+		install -o root -g wheel -m 644 "$tmp" "$staging"
+		mv -f "$staging" "$RULES"; staging=""
 		echo "persisted $RULES" ;;
 	lock)          [ -d "$LOCK_DIR" ] || mkdir -m 700 "$LOCK_DIR"; exec mkdir -m 700 "$LOCK_DIR/update.lock" ;;
 	unlock)        exec rmdir "$LOCK_DIR/update.lock" ;;

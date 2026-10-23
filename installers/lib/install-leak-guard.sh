@@ -2,6 +2,7 @@
 # Anchor 020: block physical DNS/STUN and force this user's public traffic into the TUN. Hooks /etc/pf.conf.
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
+assert_root_dir /usr/local/libexec  # before anything is written: a swappable program dir would defeat every root daemon
 anchor=com.apple/020.local.leak-guard
 rules=$(src system/pf.anchors/local.leak-guard); loader=$(src system/libexec/leak-guard-loader); plist=$(src system/LaunchDaemons/local.leak-guard.plist)
 refuse_existing /etc/pf.anchors/local.leak-guard /usr/local/libexec/leak-guard-loader /Library/LaunchDaemons/local.leak-guard.plist

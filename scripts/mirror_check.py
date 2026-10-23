@@ -641,25 +641,39 @@ def check_daemon_program(host, p, a):
         data = plistlib.loads(host.read_bytes(plist))
     except (HostError, ValueError) as exc:
         return FAIL, "%s 读不到或不是 plist: %s" % (plist, exc)
-    args = [x for x in data.get("ProgramArguments", []) if isinstance(x, str)]
+    if not isinstance(data, dict):
+        return FAIL, "%s 顶层不是字典" % plist
+    if "Program" in data:
+        return FAIL, "%s 用了 Program 键（本套件只认 ProgramArguments），不动" % plist
+    args = data.get("ProgramArguments") or []
+    if not isinstance(args, list) or not all(isinstance(x, str) for x in args) or not args:
+        return FAIL, "%s 的 ProgramArguments 为空或不是字符串数组: %r" % (plist, args)
+    if any(x == "-c" for x in args) or any(not x.startswith(("/", "-")) for x in args):
+        return FAIL, "%s 的 ProgramArguments 含 -c 或相对路径 %s：无法确认 root 到底执行什么" % (plist, args)
     paths = [x for x in args if x.startswith("/")]
-    if not paths:
-        return FAIL, "%s 的 ProgramArguments 没有程序路径: %s" % (plist, args)
     for path in paths:
+        if "/../" in path + "/":
+            return FAIL, "%s 执行的路径含 ..: %s" % (label, path)
         st = host.lstat(path)
         if st is None:
             return FAIL, "%s 执行的 %s 不存在" % (label, path)
         if host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022:
             return FAIL, "%s 以 root 执行 %s，但它不是 root 持有/他人可写/是符号链接（uid=%s mode=%o）：任何能改这个文件的程序都能拿到 root；旧守护请双击 installers/迁移IPv6守护.command" % (
                 label, path, st.st_uid, st.st_mode & 0o777)
-    st_first = host.lstat(paths[0])
-    if not (st_first.st_mode & 0o111):
+        # Every directory above it must be root-owned and not group/other writable too, or the file can be swapped.
+        parent = os.path.dirname(path)
+        while parent and parent != "/":
+            pst = host.lstat(parent)
+            if pst is None or host.is_link(parent) or pst.st_uid != 0 or pst.st_mode & 0o022:
+                return FAIL, "%s 执行的 %s 所在目录 %s 不是 root 持有/他人可写/是符号链接：文件可以被换掉" % (label, path, parent)
+            parent = os.path.dirname(parent)
+    if not (host.lstat(paths[0]).st_mode & 0o111):
         return FAIL, "%s 执行的 %s 不可执行" % (label, paths[0])
-    logs = [data.get(k) for k in ("StandardOutPath", "StandardErrorPath") if data.get(k)]
-    bad_logs = [l for l in logs if not str(l).startswith(("/var/", "/Library/", "/private/var/"))]
+    logs = [str(data.get(k)) for k in ("StandardOutPath", "StandardErrorPath") if data.get(k)]
+    bad_logs = [l for l in logs if "/../" in l + "/" or not l.startswith(("/var/log/", "/private/var/log/", "/Library/Logs/"))]
     if bad_logs:
-        return FAIL, "%s 以 root 写日志到用户可控路径 %s（符号链接即可让 root 覆盖任意文件）；应在 /var/log 下" % (label, bad_logs)
-    return PASS, "%s 执行 %s（root 持有，他人不可写）" % (label, paths)
+        return FAIL, "%s 以 root 写日志到 %s（只允许 /var/log、/Library/Logs；用户可控路径下一个符号链接就能让 root 覆盖任意文件）" % (label, bad_logs)
+    return PASS, "%s 执行 %s（root 持有，所在目录与文件他人不可写）" % (label, paths)
 
 
 def check_launch_daemon(host, p, a):

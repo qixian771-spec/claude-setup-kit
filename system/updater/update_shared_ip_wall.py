@@ -299,9 +299,7 @@ class SystemBackend:
 
     def persist(self, values):
         text = render_rules(values)
-        original = RULES.read_bytes()
         require(parse_rules(text) == values, 'Rendered rules do not round-trip')  # self-check of our own rendering
-        require(RULES.read_bytes() == original, 'Concurrent rules change')
         # The helper only accepts exact host addresses: it rewrites the table line of the live file itself, validates
         # with pfctl -n, backs the old file up under /var/db/ClaudeDirectWall, stages next to it and renames atomically.
         root('persist', *ordered(values))

@@ -31,7 +31,7 @@ exit_code = 1 if "FAIL" in statuses else 2 if "UNKNOWN" in statuses else 0
 merged = dict(user, items=items, exit=exit_code, note=(user.get("note") or ""), merged_from=["user", "root(--no-network)"])
 json.dump(merged, open(sys.argv[3], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 PY
-  then rc=0; mirror_rc=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["exit"])' "$out"); else rc=1; mirror_rc="?"; : > "$out"; fi
+  then rc=0; mirror_rc=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["exit"])' "$out"); else rc=1; mirror_rc="?"; : > "$out"; echo "用户身份那次退出 ${user_rc:-?}（输出 $(wc -c < "$user_json" | tr -d ' ') 字节），root 那次退出 ${root_rc:-?}（输出 $(wc -c < "$root_json" | tr -d ' ') 字节）"; fi
   if [ -s "$out" ]; then
     /usr/bin/python3 - "$out" <<'PY'
 import json, sys
@@ -44,7 +44,7 @@ print("合计: ✅ %d  ❌ %d  ❓ %d  ℹ️ %d  👉 %d  共 %d 项  → exit 
 PY
     echo "结果已写到 ${out}；接下来 AI 运行: python3 scripts/next_step.py --input $out"
   else
-    echo "两次对账里至少一次没有输出（多半是 sudo 密码没通过），没有合并结果；上一次的结果已被清掉"
+    echo "两次对账里至少一次没有输出或合并失败（root 那次为空多半是 sudo 密码没通过；用户那次为空看上面的退出码），没有合并结果；上一次的结果已被清掉"
   fi
   echo "MIRROR_EXIT=${mirror_rc}（合并后对账的退出码：0 全 ✅ / 1 有 ❌ / 2 有 ❓；root 那一次本身退出 ${root_rc:-?}）"
   echo "EXIT=${rc}"

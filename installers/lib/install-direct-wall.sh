@@ -2,6 +2,7 @@
 # Anchor 010: Claude's exact IPs may only leave through the TUN. Also hooks /etc/pf.conf for boot.
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
+assert_root_dir /usr/local/libexec  # before anything is written: a swappable program dir would defeat every root daemon
 anchor=com.apple/010.local.claude-direct-wall
 rules=$(src system/pf.anchors/local.claude-direct-wall); loader=$(src system/libexec/claude-direct-wall); plist=$(src system/LaunchDaemons/local.claude-direct-wall.plist)
 refuse_existing /etc/pf.anchors/local.claude-direct-wall /usr/local/libexec/claude-direct-wall /Library/LaunchDaemons/local.claude-direct-wall.plist

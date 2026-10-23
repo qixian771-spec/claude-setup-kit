@@ -181,6 +181,8 @@ class RootHelperTests(unittest.TestCase):
     def test_helper_rejects_bad_arguments_before_doing_anything(self):
         for args in (["rules", "a;b"], ["rules"], ["rules", ".."], ["rules", "com.apple/999.other"], ["table", "com.apple/011.local.claude-net-wall", "bad name"],
                      ["table-add", "203.0.113.4", "5;6"], ["table-add", "0.0.0.0/0"], ["table-add", "dead.beef"], ["table-add"],
+                     ["table-add", "1.2.3.4.5"], ["table-add", "999.999.999.999"], ["table-add", "...."], ["table-add", ":"], ["table-add", ":::"],
+                     ["table-add", "::"], ["table-add", "0.0.0.0"], ["table-add", "127.0.0.1"], ["table-add", "::1"], ["table-add", "fe80::1"], ["table-add", "224.0.0.1"],
                      ["kill", "-k"], ["kill", "0.0.0.0/0"], ["persist"], ["persist", "203.0.113.0/24"], ["check", "x"], ["info", "extra"], ["bogus"], []):
             proc = self.run_helper(*args)
             self.assertEqual(proc.returncode, 64, args)
@@ -212,4 +214,12 @@ class Ipv6MigrationTests(unittest.TestCase):
         self.assertIn("exit 73", text)
         self.assertNotIn("|| true", text)
         self.assertTrue((ROOT / "installers" / "迁移IPv6守护.command").exists())
+
+    def test_persist_is_additive_and_installers_check_the_program_directory_chain(self):
+        helper = (ROOT / "system" / "libexec" / "claude-pf-helper").read_text(encoding="utf-8")
+        self.assertIn("只增不减", helper)
+        self.assertLess(helper.index("只增不减"), helper.index("mktemp /tmp/claude-pf-persist"))
+        for name in ("install-updater.sh", "install-direct-wall.sh", "install-net-wall.sh", "install-leak-guard.sh", "install-watch.sh", "install-ipv6-guard.sh"):
+            text = (ROOT / "installers" / "lib" / name).read_text(encoding="utf-8")
+            self.assertLess(text.index("assert_root_dir /usr/local/libexec"), text.index("install -o root"), name)
 

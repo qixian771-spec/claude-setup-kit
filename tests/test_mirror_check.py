@@ -157,6 +157,7 @@ def baseline_stats():
         "/Library/Managed Preferences/com.google.Chrome.plist": Stat(0, 0o100644),
         HOME + "/.local/bin/ipv6-guard.sh": Stat(501, 0o100755),
         "/usr/local/libexec/ipv6-guard.sh": Stat(0, 0o100755),
+        "/usr": Stat(0, 0o40755), "/usr/local": Stat(0, 0o40755), "/usr/local/libexec": Stat(0, 0o40755),
         HOME + "/.local/bin/claude-wall": Stat(501, 0o100755),
     }
     for label in ("local.claude-direct-wall", "local.claude-net-wall", "local.leak-guard",
@@ -746,6 +747,19 @@ class SystemTests(unittest.TestCase):
         host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(0, 0o100775)  # group-writable: still no
         _, items, _ = run_json(host, "--only", "ipv6.script")
         self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(0, 0o100755)
+        host.stats["/usr/local/libexec"] = Stat(501, 0o40755)  # a swappable parent directory is just as bad
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        self.assertIn("所在目录", items["ipv6.script"]["evidence"])
+        host.stats["/usr/local/libexec"] = Stat(0, 0o40755)
+        loose = IPV6_GUARD_PLIST.replace(b"/var/log/ipv6-guard.out", b"/var/tmp/ipv6-guard.out")
+        host.bytes["/Library/LaunchDaemons/local.ipv6-guard.plist"] = loose
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)  # /var/tmp is not a log directory
+        host.bytes["/Library/LaunchDaemons/local.ipv6-guard.plist"] = b"<plist version=\"1.0\"><array/></plist>"
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)  # not a dict: a clean ❌, not a crash
         # The old hand-installed guard: plist points into the user's home → ❌ whatever parameters say (there is no
         # parameter for the script path any more; the check reads what the daemon really executes).
         old = IPV6_GUARD_PLIST.replace(b"/usr/local/libexec/ipv6-guard.sh", (HOME + "/.local/bin/ipv6-guard.sh").encode()).replace(b"/var/log/ipv6-guard", (HOME + "/.ipv6-guard").encode())

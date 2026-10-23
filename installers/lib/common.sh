@@ -48,5 +48,14 @@ pf_conf_remove() { # pf_conf_remove <anchor>
     cat "$tmp" > /etc/pf.conf; rm -f "$tmp"
     echo "pf.conf 已去掉 $1 的装载行（备份 ${bk}）"
 }
+assert_root_dir() { # assert_root_dir <dir>: create if missing (root, 755); every level up to / must be root-owned, not group/other writable, not a link
+    d=$1
+    [ -e "$d" ] || install -d -o root -g wheel -m 755 "$d"
+    while [ "$d" != "/" ]; do
+        if [ -L "$d" ]; then echo "${d} 是符号链接：免密放行或 root 执行的程序放在这里可被替换，停止" >&2; exit 73; fi
+        case "$(stat -f '%u:%Lp' "$d")" in 0:7[0-5][0-5]) ;; *) echo "${d} 属主/权限 $(stat -f '%u:%Lp' "$d")：必须 root 持有且组/其他不可写，停止" >&2; exit 73;; esac
+        d=$(dirname "$d")
+    done
+}
 daemon_loaded() { launchctl print "system/$1" >/dev/null 2>&1; }
 bootout_if_loaded() { if daemon_loaded "$1"; then launchctl bootout "system/$1"; fi; }

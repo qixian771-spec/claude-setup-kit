@@ -3,6 +3,7 @@
 # Needs a narrow sudoers rule (installed here after visudo -cf) and the 010 wall already in place.
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
+assert_root_dir /usr/local/libexec  # before anything is written: a swappable program dir would defeat every root daemon
 pkg="/Library/Application Support/ClaudeDirectWallUpdater"; state="$MIRROR_HOME/Library/Application Support/ClaudeDirectWallUpdater"
 plist=$(src system/LaunchDaemons/local.claude-address-update.plist); sudoers=$(src system/sudoers/claude-mac-env-mirror); helper=$(src system/libexec/claude-pf-helper)
 refuse_existing "$pkg" "$state" /Library/LaunchDaemons/local.claude-address-update.plist /etc/sudoers.d/claude-mac-env-mirror /usr/local/libexec/claude-pf-helper
@@ -17,13 +18,7 @@ mkdir -p "$pkg"; chown root:wheel "$pkg"; chmod 755 "$pkg"
    | sed '$ s/,$//' | { echo '{'; cat; echo '}'; } > "$pkg/sha256.json"
 chown root:wheel "$pkg/sha256.json"; chmod 644 "$pkg/sha256.json"
 install -d -o "$MIRROR_USER" -m 700 "$state"
-# The helper is the only command the sudoers rule allows; it must be root-owned and in place before the rule, and
-# nobody but root may be able to replace it (so its directory chain must be root-owned and not group/other writable).
-install -d -o root -g wheel -m 755 /usr/local/libexec
-for d in /usr/local /usr/local/libexec; do
-    owner=$(stat -f '%u' "$d"); perm=$(stat -f '%Lp' "$d")
-    case "$owner:$perm" in 0:7[0-5][0-5]) ;; *) echo "${d} 属主 uid=${owner} 权限 ${perm}：必须 root 持有且组/其他不可写，否则免密放行的助手可被替换；停止" >&2; exit 73;; esac
-done
+# The helper is the only command the sudoers rule allows; it must be root-owned and in place before the rule.
 install -o root -g wheel -m 755 "$helper" /usr/local/libexec/claude-pf-helper
 install -o root -g wheel -m 440 "$sudoers" /etc/sudoers.d/claude-mac-env-mirror
 install -o root -g wheel -m 644 "$plist" /Library/LaunchDaemons/local.claude-address-update.plist
