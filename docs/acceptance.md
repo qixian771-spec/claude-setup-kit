@@ -13,3 +13,7 @@
 - `699c2c5`：[run 39874114255](https://github.com/qixian771-spec/claude-setup-kit/actions/runs/39874114255) 三个 job 全部通过：ubuntu 3.9 / 3.12 与 macos-14 3.12 的 check.py、redact_check、81 项测试；macOS 原生只读 smoke（mirror_check 在空 runner 上 exit 1 不崩、7 个组件渲染、`pfctl -n`、`plutil -lint`）。
 - 之前三轮失败均为 runner 环境差异（无 uid 501、bash -e 中止、无 Wi-Fi 服务），逐一修正，见 docs/release-tasks.md。
 - vps-node-rebuild-3xui `ddde001`（macos-leak-guard.md 改为对照与链接）：run 39873953681 四个 job 全部通过。
+
+## E6 弱模型推演（2026-10-22）
+
+Haiku 子代理只拿 README 的"发给 AI 的一段话"，在去掉卸载脚本的临时克隆里做只读部分：读 START.md → `mirror_check`（33 ✅ / 1 ❌）→ 问路线并（按预设）得到 B → `next_step`（S7，因克隆里没有 mirror.params.json，ipv6 守护 label 用了默认值）→ 准备让用户双击、不越界。它指出两处缺口：START.md 第 0 步没要求写 mirror.params.json；S7 话术没提输密码。两处已修（`fb85ee4`，CI run 39875414828 success）。
