@@ -5,7 +5,7 @@
 #   成员是主出口以外的节点——Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"，
 #   所以 Google 走另一个节点，Claude 的出口不动。两个分组的规则顺序：Claude 的 storage/fonts 精确规则在前，
 #   Google 后缀规则其次，GEOSITE/GEOIP 兜底在后。
-# rules 段含参考机的 112 条规则：其中监测/上报、CDN、第三方、进程兜底等 68 条来自 claude-client-full-reset 的
+# rules 段含参考机的 111 条规则（去掉了 IP-ASN：它要先联网下载 ASN.mmdb，新机器没有代理时下载超时、整个配置验证失败）：其中监测/上报、CDN、第三方、进程兜底等 68 条来自 claude-client-full-reset 的
 #   telemetry_routing.py（6 大模块），要更新以那边为准。
 mixed-port: 7890
 allow-lan: false
@@ -124,6 +124,7 @@ proxies:
   reality-opts:
     public-key: '{{NODE1_REALITY_PUBLIC_KEY}}'
     short-id: '{{NODE1_REALITY_SHORT_ID}}'
+    support-x25519mlkem768: true  # 参考机的 REALITY 服务端要求；不带这项握手直接失败（Windows 实机验证）
 - name: '{{NODE2_NAME}}'
   type: trojan
   server: '{{NODE2_SERVER}}'
@@ -138,7 +139,7 @@ proxies:
   port: {{NODE3_PORT}}
   username: '{{NODE3_USERNAME}}'
   password: '{{NODE3_PASSWORD}}'
-  udp: true
+  udp: false  # 参考机的住宅 socks5 不支持 UDP；确认你的支持再改成 true
 proxy-groups:
 - name: '{{EXIT_GROUP}}'
   type: select
@@ -211,7 +212,6 @@ rules:
 - DOMAIN-SUFFIX,arkoselabs.com,{{EXIT_GROUP}}
 - IP-CIDR,160.79.104.0/21,{{EXIT_GROUP}},no-resolve
 - IP-CIDR6,2607:6bc0::/32,{{EXIT_GROUP}},no-resolve
-- IP-ASN,399358,{{EXIT_GROUP}},no-resolve
 - GEOSITE,anthropic,{{EXIT_GROUP}}
 - GEOSITE,category-ntp,{{EXIT_GROUP}}
 - PROCESS-NAME,Claude,{{EXIT_GROUP}}

@@ -82,6 +82,7 @@ tun:
   device: utun1024
   enable: true
 '''
+BASE_CONFIG = "mixed-port: 7890\nmode: rule\nexternal-controller-unix: /tmp/verge/verge-mihomo.sock\ntun:\n  stack: gvisor\n"
 UPDATER_LOG = "\n".join([
     json.dumps({"status": "APPLIED", "finished_utc": "2026-10-22T22:15:11.468705+00:00"}),
     json.dumps({"report": "x", "status": "STOPPED_OLD_TARGETS_NOT_REMOVED", "new_candidates": []}),
@@ -186,7 +187,8 @@ class FakeHost:
     def __init__(self, sudo=True, macos=True, uid=501, now=NOW):
         self.cmds, self.stats, self.apis = baseline_cmds(), baseline_stats(), baseline_apis()
         self.files = {"/etc/pf.conf": PF_CONF,
-                      HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml": RUNTIME_CONFIG}
+                      HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml": RUNTIME_CONFIG,
+                      HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml": BASE_CONFIG}
         self.bytes = {"/Library/Managed Preferences/com.google.Chrome.plist": CHROME_POLICY}
         self.links = set()
         self.sudo, self.macos, self.uid, self._now = sudo, macos, uid, now
@@ -475,6 +477,18 @@ class ClashTests(unittest.TestCase):
         self.assertEqual(code, 2)
 
 
+class BaseConfigTests(unittest.TestCase):
+    def test_base_config_with_embedded_profile_fails(self):
+        host = FakeHost()
+        key = next(k for k in host.files if k.endswith("/config.yaml"))
+        host.files[key] = BASE_CONFIG + "proxies:\n- name: x\nproxy-groups:\n- name: y\nrules:\n- MATCH,y\n"
+        _, items, _ = run_json(host, "--only", "clash.base_config")
+        self.assertEqual(items["clash.base_config"]["status"], mc.FAIL)
+        self.assertIn("proxies", items["clash.base_config"]["evidence"])
+        _, items, _ = run_json(FakeHost(), "--only", "clash.base_config")
+        self.assertEqual(items["clash.base_config"]["status"], mc.PASS)
+
+
 class GoogleExitTests(unittest.TestCase):
     def test_reference_google_group_passes(self):
         _, items, _ = run_json(FakeHost(), "--only", "clash.google_exit")
@@ -719,6 +733,22 @@ class CliTests(unittest.TestCase):
         _, items, _ = run_json(host, "--only", "dns.system,net.ipv6_off", "--param", "network_services=Ethernet")
         self.assertEqual(items["dns.system"]["status"], mc.PASS)
         self.assertEqual(items["net.ipv6_off"]["status"], mc.PASS)
+
+    def test_local_params_file_keeps_list_types(self):
+        local = Path(MANIFEST).parent / "mirror.params.json"
+        local.write_text(json.dumps({"network_services": ["Ethernet"]}), encoding="utf-8")
+        try:
+            host = FakeHost()
+            host.cmds[("networksetup", "-getdnsservers", "Ethernet")] = (0, "127.0.0.1\n", "")
+            _, items, data = run_json(host, "--only", "dns.system")
+            self.assertEqual(data["params"]["network_services"], ["Ethernet"])
+            self.assertEqual(items["dns.system"]["status"], mc.PASS)
+            local.write_text(json.dumps({"nope": 1}), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    run(FakeHost(), "--only", "os")
+        finally:
+            local.unlink()
 
     def test_json_shape(self):
         code, out = run(FakeHost(), "--json", "--only", "os")

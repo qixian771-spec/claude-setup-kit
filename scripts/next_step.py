@@ -103,6 +103,9 @@ def build(step, status, evidence, states, via=None):
            "ai_action": step.get("ai_action"), "user_action": step.get("user_action"), "say": step.get("say"),
            "verify": "python3 scripts/mirror_check.py --only %s" % ids if ids else "python3 scripts/mirror_check.py",
            "then": "python3 scripts/next_step.py"}
+    if platform_key() == "win32":
+        out["verify"] = out["verify"].replace("python3 scripts/", "py -3 scripts\\")
+        out["then"] = out["then"].replace("python3 scripts/", "py -3 scripts\\")
     if sudo_needed:
         out["note"] = "有 ❓ 是因为需要 sudo：先 `sudo python3 scripts/mirror_check.py --only %s` 再判断，不要当作 ❌ 去重装" % ids
     if any(p["status"] != PASS for p in precheck):

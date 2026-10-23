@@ -133,15 +133,15 @@ def check_firewall_rules(host, p, a):
     for rule in a["rules"]:
         name = p["firewall_prefix"] + " " + rule["name"]
         try:
-            data = _ps_json(host, "Get-NetFirewallRule -DisplayName %s | Select-Object DisplayName,Enabled,Action,Direction" % _q(name), "fw-rule")
+            # Enums as strings: ConvertTo-Json would otherwise emit numbers (Enabled True=1, Action Block=4, Direction Outbound=2).
+            data = _ps_json(host, "Get-NetFirewallRule -DisplayName %s | Select-Object DisplayName,"
+                                  "@{n='Enabled';e={[string]$_.Enabled}},@{n='Action';e={[string]$_.Action}},@{n='Direction';e={[string]$_.Direction}}" % _q(name), "fw-rule")
         except mc.HostError:
             problems.append("缺规则 %s" % name)
             continue
         if isinstance(data, list):
             data = data[0] if data else {}
-        enabled = str(data.get("Enabled")) in ("True", "1", "true")
-        if not enabled or str(data.get("Action")) not in (rule["action"], "2" if rule["action"] == "Block" else "1") \
-                or str(data.get("Direction")) not in (rule["direction"], "2" if rule["direction"] == "Outbound" else "1"):
+        if data.get("Enabled") != "True" or data.get("Action") != rule["action"] or data.get("Direction") != rule["direction"]:
             problems.append("%s 状态不对: %s" % (name, data))
         seen.append(name)
     if problems:

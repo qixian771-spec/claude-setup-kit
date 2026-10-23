@@ -58,6 +58,21 @@ def platform_key():
     return "win32" if sys.platform.startswith("win") else "darwin"
 
 
+def dechunk(body):
+    """Decode an HTTP/1.1 chunked body (mihomo uses it for large responses over the Windows pipe)."""
+    out, rest = b"", body
+    while True:
+        size_line, sep, rest = rest.partition(b"\r\n")
+        if not sep:
+            raise HostError("分块响应被截断")
+        size = int(size_line.split(b";")[0].strip() or b"0", 16)
+        if size == 0:
+            return out
+        if len(rest) < size:
+            raise HostError("分块响应被截断")
+        out, rest = out + rest[:size], rest[size + 2:]
+
+
 class Host:
     """Every query the checks make goes through here, so tests can replace it."""
 
@@ -145,13 +160,20 @@ class Host:
                         m = re.search(rb"(?i)content-length:\s*(\d+)", head)
                         if m and len(body) >= int(m.group(1)):
                             break
+                        if re.search(rb"(?im)^transfer-encoding:\s*chunked", head) and body.endswith(b"0\r\n\r\n"):
+                            break
         except OSError as exc:
             raise HostError("命名管道不可达 %s: %s" % (pipe, exc))
         head, _, body = raw.partition(b"\r\n\r\n")
         status = head.split(b" ", 2)
         if len(status) < 2 or status[1] != b"200":
             raise HostError("API %s 返回 %s" % (path, status[1].decode("ascii", "replace") if len(status) > 1 else "?"))
-        return json.loads(body.decode("utf-8", "replace"))
+        if re.search(rb"(?im)^transfer-encoding:\s*chunked", head):
+            body = dechunk(body)
+        try:
+            return json.loads(body.decode("utf-8", "replace"))
+        except ValueError as exc:
+            raise HostError("API %s 返回的不是 JSON: %s" % (path, exc))
 
     def ps(self, script, tag=None, timeout=60):
         """Run a PowerShell snippet (UTF-8 output, errors stop); returns stdout. `tag` only names it for tests."""
@@ -312,6 +334,16 @@ def check_clash_rules(host, p, a):
     if missing:
         return FAIL, "缺/错: " + "; ".join(missing)
     return PASS, "%d 条规则，必需项齐全" % len(rules)
+
+
+def check_clash_base_config(host, p, a):
+    path = expand(host, p["clash_base_config"])
+    text = host.read_text(path)
+    keys = [m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:", text, re.M)]
+    bad = [k for k in ("dns", "proxies", "proxy-groups", "rules", "proxy-providers", "rule-providers") if k in keys]
+    if bad:
+        return FAIL, "%s 里有顶层 %s：Clash Verge 会用它们覆盖当前订阅" % (path, bad)
+    return PASS, "%s 只有基础键（%d 个）" % (path, len(keys))
 
 
 def check_clash_google_exit(host, p, a):
@@ -852,8 +884,13 @@ def main(argv=None, host=None):
     params = dict(manifest["params"])
     local = Path(args.manifest).parent / "mirror.params.json"
     if local.exists():
-        # Per-machine overrides (git-ignored); same keys as manifest params.
-        params = apply_overrides(params, ["%s=%s" % (k, v) for k, v in json.loads(local.read_text(encoding="utf-8-sig")).items()])
+        # Per-machine overrides (git-ignored); same keys as manifest params. Values keep their JSON type
+        # (lists stay lists — going through "k=v" strings would turn ["以太网"] into "['以太网']").
+        extra = json.loads(local.read_text(encoding="utf-8-sig"))
+        unknown = set(extra) - set(params)
+        if unknown:
+            ap.error("mirror.params.json 有未知参数: %s" % sorted(unknown))
+        params.update(extra)
     params = apply_overrides(params, args.param)
     comps = manifest["components"]
     if args.only:

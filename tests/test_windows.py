@@ -35,7 +35,7 @@ class WinHost(FakeHost):
             "reg-Chrome": json.dumps({"WebRtcIPHandling": "disable_non_proxied_udp", "DnsOverHttpsMode": "off"}),
             "reg-Edge": json.dumps({"WebRtcIPHandling": "disable_non_proxied_udp", "DnsOverHttpsMode": "off"}),
             "fw-profile": json.dumps([{"Name": "Domain", "Enabled": True}, {"Name": "Private", "Enabled": True}, {"Name": "Public", "Enabled": True}]),
-            "fw-rule": json.dumps({"DisplayName": "x", "Enabled": True, "Action": "Block", "Direction": "Outbound"}),
+            "fw-rule": json.dumps({"DisplayName": "x", "Enabled": "True", "Action": "Block", "Direction": "Outbound"}),
             "task": json.dumps({"State": "Ready", "LastTaskResult": 0, "LastRunTime": "2026-10-22 16:00"}),
             "lang": "zh-Hans-CN\nen-US\n",
         }
@@ -45,7 +45,8 @@ class WinHost(FakeHost):
             HOME + "\\AppData\\Local\\claude-setup-kit\\claude-wall.ps1": Stat(0, 0o100644),
         }
         runtime = HOME + "\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\clash-verge.yaml"
-        self.files = {runtime: list(self.files.values())[1], "C:\\ProgramData\\claude-setup-kit\\watch\\last": "2026-10-22T22:36:23Z\tOK\t全部正常\n"}
+        self.files = {runtime: list(self.files.values())[1], "C:\\ProgramData\\claude-setup-kit\\watch\\last": "2026-10-22T22:36:23Z\tOK\t全部正常\n",
+                      HOME + "\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\config.yaml": "mixed-port: 7890\nexternal-controller-pipe: x\n"}
         self.apis["/configs"]["tun"]["device"] = "Meta"
 
     # Paths built on macOS use "/", the fixture keys use "\\": compare them normalised.
@@ -89,7 +90,7 @@ class WindowsBaselineTests(unittest.TestCase):
         self.assertEqual(m["params"]["tun_device"], "Meta")
         self.assertEqual(m["params"]["clash_api"], "pipe://verge-mihomo")
         self.assertEqual(m["platform"], "win32")
-        self.assertEqual(len(m["components"]), 26)
+        self.assertEqual(len(m["components"]), 27)
 
     def test_reference_windows_passes_everything(self):
         code, items, data = run_json(WinHost())
@@ -148,9 +149,16 @@ class WindowsFailureTests(unittest.TestCase):
         self.assertIn("缺规则 claude-setup-kit: net-wall v4", items["wf.011"]["evidence"])
         self.assertEqual(items["wf.020"]["status"], mc.FAIL)
 
+    def test_rule_with_numeric_enums_is_not_trusted(self):
+        # The check asks PowerShell for string enums; a numeric payload means the query shape changed.
+        host = WinHost()
+        host.ps_outputs["fw-rule"] = json.dumps({"DisplayName": "x", "Enabled": 1, "Action": 4, "Direction": 2})
+        _, items, _ = run_json(host, "--only", "wf.011")
+        self.assertEqual(items["wf.011"]["status"], mc.FAIL)
+
     def test_rule_disabled(self):
         host = WinHost()
-        host.ps_outputs["fw-rule"] = json.dumps({"DisplayName": "x", "Enabled": False, "Action": "Block", "Direction": "Outbound"})
+        host.ps_outputs["fw-rule"] = json.dumps({"DisplayName": "x", "Enabled": "False", "Action": "Block", "Direction": "Outbound"})
         _, items, _ = run_json(host, "--only", "wf.011")
         self.assertIn("状态不对", items["wf.011"]["evidence"])
 
@@ -198,6 +206,11 @@ class PlumbingTests(unittest.TestCase):
         items = {i["id"]: i for i in json.loads(proc.stdout)["items"]}
         self.assertEqual(items["net.tun_iface"]["status"], mc.FAIL)
         self.assertEqual(items["wf.011"]["status"], mc.FAIL)
+
+    def test_dechunk(self):
+        self.assertEqual(mc.dechunk(b"4\r\nWiki\r\n6;ext=1\r\npedia \r\n0\r\n\r\n"), b"Wikipedia ")
+        with self.assertRaises(mc.HostError):
+            mc.dechunk(b"10\r\nshort")
 
     def test_clixml_error_is_humanised(self):
         err = '#< CLIXML\n<Objs><S S="Error">Get-NetIPAddress : 找不到接口 Meta_x000D__x000A_</S><S S="Error">所在位置</S></Objs>'

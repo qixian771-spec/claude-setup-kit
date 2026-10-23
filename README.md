@@ -25,7 +25,7 @@ START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走�
 | `scripts/mirror_check.py` | 一条命令只读对账，✅/❌/❓/ℹ️/👉 表与退出码 0/1/2 |
 | `scripts/next_step.py` | 读对账结果，按步骤顺序打印"现在做什么"；全过时打印 ippure 验收任务 |
 | `scripts/render.py` | 把 `system/`、`templates/` 的占位符模板按本机参数渲染到独立目录 |
-| `templates/clash-profile.template.yaml` | 参考机的 Clash 配置（112 条规则）：Claude 固定出口分组 + Google 专用分组（Gemini 不被判成中国）+ 遥测/CDN/第三方规则，节点全部占位符 |
+| `templates/clash-profile.template.yaml` | 参考机的 Clash 配置（111 条规则，去掉了新机器会卡死的 IP-ASN）：Claude 固定出口分组 + Google 专用分组（Gemini 不被判成中国）+ 遥测/CDN/第三方规则，节点全部占位符 |
 | `installers/安装*.command`、`卸载.command` | 用户双击安装/卸载（先拒绝覆盖再写、pf.conf 备份+语法检查、装后验证），输出写 `installers/logs/` |
 | `installers/Chrome策略.mobileconfig` | Chrome WebRTC/DoH 策略描述文件（手工写 Managed Preferences 会被系统清掉） |
 | `assets/webrtc-test.html` | 本地 WebRTC 候选检查 |

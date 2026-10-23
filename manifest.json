@@ -100,7 +100,8 @@
       "gstatic.com",
       "googleusercontent.com"
     ],
-    "google_group_note": "Google's geolocation often classifies hosting IPs used by Chinese customers as China/HK (Gemini: region not supported). Google traffic therefore uses a separate select group whose current member must not be the Claude exit node."
+    "google_group_note": "Google's geolocation often classifies hosting IPs used by Chinese customers as China/HK (Gemini: region not supported). Google traffic therefore uses a separate select group whose current member must not be the Claude exit node.",
+    "clash_base_config": "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml"
   },
   "components": [
     {
@@ -125,6 +126,17 @@
         "win32"
       ],
       "next_win": "打开 Clash Verge（Windows 版控制通道是命名管道 \\\\.\\pipe\\verge-mihomo；核心没运行就连不上）。"
+    },
+    {
+      "id": "clash.base_config",
+      "layer": "代理",
+      "title": "Clash Verge 基础配置没有夹带 proxies/proxy-groups/rules/dns（否则会覆盖任何订阅）",
+      "check": "clash_base_config",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next": "退出 Clash Verge（托盘里退出），备份后从 config.yaml 删掉顶层的 dns / proxies / proxy-groups / rules 段，再打开 Clash Verge。这些段会覆盖所有订阅，导致选哪张配置都没用。"
     },
     {
       "id": "clash.mode",
@@ -754,6 +766,7 @@
       "title": "Clash Verge：固定出口与 fake-ip DNS",
       "components": [
         "clash.core",
+        "clash.base_config",
         "clash.mode",
         "clash.tun",
         "clash.exit",
@@ -767,7 +780,7 @@
       "requires": [],
       "installer": null,
       "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A 建节点）",
-      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 右键该配置 → 编辑脚本 → 粘贴 clash-profile.script.js → 保存并激活；设置里开 TUN 模式；代理页把出口分组选到出口节点",
+      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式；代理页把出口分组选到出口节点",
       "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件和脚本，你在 Clash Verge 里导入、绑定脚本、开 TUN、选节点。"
     },
     {
@@ -963,7 +976,8 @@
     "system_dns_accept": [],
     "chrome_app": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "timezone_win": "Pacific Standard Time"
+    "timezone_win": "Pacific Standard Time",
+    "clash_base_config": "%APPDATA%/io.github.clash-verge-rev.clash-verge-rev/config.yaml"
   },
   "steps_win": [
     {
@@ -971,6 +985,7 @@
       "title": "Clash Verge（Windows）：固定出口与 fake-ip DNS",
       "components": [
         "clash.core",
+        "clash.base_config",
         "clash.mode",
         "clash.tun",
         "clash.exit",
@@ -986,7 +1001,7 @@
       "requires": [],
       "installer": null,
       "ai_action": "py -3 scripts\\render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
-      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 右键 → 编辑脚本 → 粘贴 clash-profile.script.js → 激活 → 设置里开 TUN 模式 → 代理页把出口分组选到出口节点",
+      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式 → 代理页把出口分组选到出口节点",
       "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置和脚本；你在 Clash Verge 里装服务模式、导入、绑定脚本、开 TUN、选节点。"
     },
     {
@@ -1003,9 +1018,9 @@
       "precheck": [
         "net.tun_iface"
       ],
-      "installer": "installers\\win\\安装防火墙规则.cmd",
-      "log": "win-firewall",
-      "user_action": "确认 Clash 服务模式在运行、TUN 在，再双击 installers\\win\\安装防火墙规则.cmd，UAC 点“是”",
+      "installer": "installers\\win\\一键安装全部.cmd",
+      "log": "一键安装全部",
+      "user_action": "确认 Clash 服务模式在运行、TUN 在，再双击 installers\\win\\一键安装全部.cmd（一次 UAC 装完 S2–S7，失败即停，可续跑）；也可以按组件单独双击",
       "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。同意就双击“安装防火墙规则.cmd”，弹 UAC 点“是”。"
     },
     {

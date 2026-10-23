@@ -30,7 +30,7 @@ Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mi
 |---|---|---|---|---|
 | **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：键名用本仓库 `templates/clash-profile.template.yaml` 里的 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（trojan/socks5 用 NODE2/NODE3 的键）；文件放私有目录，**不进任何仓库** |
 | **B 配 Mac** | 有节点参数；macOS | 本仓库 [执行手册](references/runbook.md) S1–S12；每做完一步跑 `python3 scripts/next_step.py`，它会说下一步做什么 | `mirror_check` 全 ✅ + ippure 四项 | 全量对账表、日志路径、截图 |
-| **B′ 配 Windows 10/11** | 有节点参数；Windows | 本仓库 [Windows 手册](references/runbook-windows.md) S1–S9；命令用 `py -3 scripts\mirror_check.py`、`py -3 scripts\next_step.py`；安装用 `installers\win\*.cmd` / `*.reg`（UAC） | 同 B | 同 B |
+| **B′ 配 Windows 10/11** | 有节点参数；Windows | 本仓库 [Windows 手册](references/runbook-windows.md) S1–S9；命令用 `py -3 scripts\mirror_check.py`、`py -3 scripts\next_step.py`；S1 之后双击 `installers\win\一键安装全部.cmd`（一次 UAC 装完 S2–S7），测完或要打游戏前双击 `一键撤回全部.cmd` | 同 B | 同 B |
 | **C 清理重置** | 换账号、封号后重来、要关遥测/补分流 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则 | 清理验收 + 标识对比表 | `identifiers.py --compare` 退出 0 的输出 |
 | **D 全套从零** | 新机器或要"和参考机一模一样" | 顺序：C（可选，只在有旧数据时）→ A（没有节点时）→ B → ippure | 同 B | 同 B |
 

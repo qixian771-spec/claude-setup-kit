@@ -16,6 +16,32 @@
 | `.command` 双击 | `.cmd` 双击 + UAC | 日志同样在 `installers\logs\` |
 | `claude-wall` | `%LOCALAPPDATA%\claude-setup-kit\claude-wall.ps1` | 退出码 0/1/6 同义 |
 
+## 推荐：一键安装 / 一键撤回（2026-10-23 实机验证）
+
+S2–S7 可以一次做完：👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
+
+撤回：👤 双击 `installers\win\一键撤回全部.cmd`：删规则、任务、策略值、体检工具，并照 `before.json` 把防火墙配置文件、时区、IPv6 改回去；守护历史与快照移到 `%USERPROFILE%\claude-setup-kit-uninstalled-<时间>`。Clash 的 TUN 由用户自己在 Clash Verge 里关。实机往返 14 项与安装前完全一致。
+
+用户找不到文件时，AI 在桌面放快捷方式（PowerShell，不需要管理员）：
+
+```powershell
+$repo = "$env:USERPROFILE\claude-setup-kit"; $sh = New-Object -ComObject WScript.Shell
+foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShortcut("$([Environment]::GetFolderPath('Desktop'))\$n.lnk"); $l.TargetPath = "$repo\installers\win\$n.cmd"; $l.WorkingDirectory = "$repo\installers\win"; $l.Save() }
+```
+
+## 实机踩过的坑（2026-10-23，Win10 19045 游戏机，Clash Verge 2.4.4 / mihomo v1.19.17）
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 导入新配置后代理页还是旧分组 | Clash Verge 的基础 `config.yaml` 被人塞了整套 dns/proxies/proxy-groups/rules，会覆盖任何订阅 | `clash.base_config` 会报；退出 Clash Verge，备份后删掉这几段 |
+| 手写进 `profiles.yaml` 的配置卡能选中但不生效 | Clash Verge 不认外部注册的卡 | 一律用界面「新建 → 本地」导入 |
+| 启动 90 秒后满屏报错退出，日志 `can't download ASN.mmdb` | `IP-ASN` 规则要先联网下载数据库，没代理就超时；还会留下半截坏库 | 模板已删这条；旧配置删掉它并挪走 `ASN.mmdb` |
+| 丽萨（VLESS-REALITY）测速报错，其他节点正常 | 节点缺 `support-x25519mlkem768: true` | 模板已带 |
+| 关了 Clash Verge 窗口再开就起不来 / 卡在验证 | 强杀 `clash-verge.exe` 会留下孤儿 `verge-mihomo.exe`；服务模式的服务也会停 | 不要强杀；必须重来时停掉全部 `clash-verge*`/`verge-mihomo` 进程，再 `Start-Service clash_verge_service`，最后让用户自己双击打开 |
+| `.cmd` 里 UAC 之后什么都没执行 | 嵌套 `-Command "…\"…\"…"` 在 cmd 里被截断 | 已改为 `-File` 调脚本、脚本自提权、自写日志 |
+| `reg import 'Chrome策略.reg'` 报打不开文件 | reg.exe 不认中文路径 | 一键安装直接写注册表值；单独双击 .reg 仍可用 |
+| 游戏机装了雷神/迅游（WFP 驱动常驻） | 驱动在但加速器不运行时不影响 TUN 和防火墙规则 | 实验期间不开加速器；要打游戏前一键撤回、关 TUN |
+
 ## G0 约束表
 
 同 macOS 手册 G0，外加：Clash Verge 必须用**服务模式**（否则核心以用户身份运行，会被 user-public 规则拦住）；网卡别名（`网络连接` 里显示的名字，如 `以太网` / `WLAN`）写进 `mirror.params.json` 的 `network_services`；Python 用 `py -3`（3.9+），仓库放在没有空格和中文的路径更省事（有也能跑）。
@@ -29,7 +55,7 @@ py -3 scripts\mirror_check.py --no-network
 
 ## S1 Clash Verge（Windows）
 
-组件：`clash.core clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录）。
+组件：`clash.core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录：实测 Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器的 DNS，真实路径由 TUN 劫持 53 保证，见 `dns.local53`）。
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
 2. AI：`py -3 scripts\render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
@@ -96,6 +122,7 @@ py -3 scripts\mirror_check.py --no-network
 | 弱模型在 Windows 上用 `python3 scripts/...` 报错 | 改 `py -3 scripts\...` | 让用户装别的 Python |
 | 控制台中文乱码 | `.cmd` 已 `chcp 65001`；脚本自己把 stdout 设为 UTF-8 | 把输出改成英文凑合 |
 | `dns.system` 显示 ℹ️ | 正常：Windows 的受管 DNS 值只记录，真实路径看 `dns.local53` | 当 ❌ 去改 DNS |
+| 用户这台是游戏机（LOL/PUBG、加速器） | 推荐往返：一键安装 → 对账/ippure → 一键撤回；长期只留 Clash 规则模式 + 浏览器策略 | 长期装 user-public 规则（会拦游戏和加速器的直连） |
 | 用户要求在 Windows 上也做精确 IP 更新器 | 说明 Windows 侧只做整段墙 + Clash 域名规则（决定见 docs/release-tasks.md） | 移植 macOS 的更新器 |
 
 ## 附录 A：卸载
@@ -107,8 +134,8 @@ py -3 scripts\mirror_check.py --no-network
 | id | 步 | 安装器 / 动作 |
 |---|---|---|
 | `os` | G1 | — |
-| `clash.core` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
-| `wf.enabled` `wf.011` `wf.020` | S2 | `安装防火墙规则.cmd` |
+| `clash.core` `clash.base_config` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
+| `wf.enabled` `wf.011` `wf.020` | S2 | `一键安装全部.cmd`（S2–S7 一次装完）或 `安装防火墙规则.cmd` |
 | `task.watch` `watch.fresh` | S3 | `安装自检守护.cmd` |
 | `net.ipv6_off` `task.ipv6` | S4 | `安装IPv6守护.cmd` |
 | `chrome.policy` `reg.edge` `browser.webrtc` | S5 | `Chrome策略.reg`、`Edge策略.reg`、`assets\webrtc-test.html` |

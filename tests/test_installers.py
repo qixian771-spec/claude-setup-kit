@@ -83,13 +83,23 @@ class LauncherTests(unittest.TestCase):
             self.assertNotRegex(raw.decode("utf-8"), r"(?<!\r)\n", path.name)
             text = raw.decode("utf-8")
             self.assertIn("chcp 65001", text)
-            if "体检工具" not in path.name:  # user-level installer runs without UAC
-                self.assertIn("-Verb RunAs", text)
-            self.assertIn("EXIT=", text)
-            if not path.name.startswith("卸载"):
+            # -File + self-elevating script: no nested -Command quoting (that broke on real Windows).
+            self.assertIn("-ExecutionPolicy Bypass -File ", text)
+            self.assertNotIn("-Command", text)
+            self.assertNotIn("-Verb RunAs", text)
+            self.assertIn('-Log "%LOG%"', text)
+            if not path.name.startswith(("一键", "卸载")):
                 self.assertIn("render.py --component win-", text)
             for script in re.findall(r"([\w-]+\.ps1)", text):
                 self.assertIn(script, shipped, script)
+        common = (ROOT / "system-win" / "firewall" / "common.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("-Verb RunAs", common)
+        self.assertIn("function Invoke-Logged", common)
+        for ps1 in (ROOT / "system-win").rglob("*.ps1"):
+            body = ps1.read_text(encoding="utf-8-sig")
+            if ps1.name.startswith(("install-", "uninstall-", "set-")):
+                self.assertIn("Invoke-Logged $Log {", body, ps1.name)
+                self.assertEqual("Enter-Elevated" in body, ps1.name != "install-tools.ps1", ps1.name)
         for ps1 in (ROOT / "system-win").rglob("*.ps1"):
             raw = ps1.read_bytes()
             self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM（Windows PowerShell 5.1）" % ps1.name)

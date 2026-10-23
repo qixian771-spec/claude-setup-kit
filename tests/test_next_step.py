@@ -135,7 +135,7 @@ class WindowsStepTests(unittest.TestCase):
     def test_windows_firewall_step_needs_tun_and_clash(self):
         out = ns.decide(self.MANIFEST_WIN, self.result({"wf.011": "FAIL", "wf.020": "FAIL", "wf.enabled": "FAIL"}))
         self.assertEqual(out["step"], "S2")
-        self.assertEqual(out["installer"], "installers\\win\\安装防火墙规则.cmd")
+        self.assertEqual(out["installer"], "installers\\win\\一键安装全部.cmd")
         self.assertEqual(out["precheck"], [{"id": "net.tun_iface", "status": "PASS"}])
         out = ns.decide(self.MANIFEST_WIN, self.result({"wf.011": "FAIL", "net.tun_iface": "FAIL"}))
         self.assertEqual(out["step"], "S1")

@@ -216,6 +216,8 @@ class ComponentTests(RenderFixture):
         self.assertIn("出口选择", text)
         self.assertIn("Google出口", text)
         self.assertIn("DOMAIN-SUFFIX,google.com,Google出口", text)
+        self.assertNotIn("\n- IP-ASN,", text)  # needs ASN.mmdb download before any proxy works → deadlock on a fresh machine
+        self.assertIn("support-x25519mlkem768: true", text)
         self.assertLess(text.index("DOMAIN,storage.googleapis.com,出口选择"), text.index("DOMAIN-SUFFIX,googleapis.com,Google出口"))
         self.assertLess(text.index("DOMAIN-SUFFIX,google.com,Google出口"), text.index("GEOSITE,geolocation-!cn"))
         params = (self.root / "c2/PARAMS.txt").read_text(encoding="utf-8")

@@ -33,3 +33,13 @@
 | W6 手册与 CI | `steps_win` S1–S9、`references/runbook-windows.md`、START 路线 B′、check.py Windows 校验、windows-2022 CI（Git Bash + 原生只读 smoke） | CI 多轮修 runner 差异（WSL bash、cp1252、测试平台假设） |
 
 未做：Clash 运行时的管道 API / TUN 名 / 受管 DNS 值的观察，`dns.system` 在 Windows 为 ℹ️；全部安装器的实机安装与卸载往返；ippure。这些等用户在 Windows 机器前一次完成。
+
+## 0.2.1 Windows 实机往返（W7，2026-10-23）
+
+用户的 Windows 游戏机（装有 WeGame、Steam、雷神、迅游等加速器）做了一次"装 → 验 → 全撤"往返，节点用参考机同一套。
+
+| 卡 | 内容 | 状态 |
+| --- | --- | --- |
+| W7 实机修复 | 模板去掉 IP-ASN（新机器下载 ASN.mmdb 超时，整份配置验证失败）；REALITY 节点加 `support-x25519mlkem768`；住宅 socks5 `udp: false`；新组件 `clash.base_config`（Clash Verge 基础 `config.yaml` 带 dns/proxies/proxy-groups/rules 会覆盖任何订阅）；命名管道响应 chunked 解码；防火墙枚举按字符串比较；`mirror.params.json` 保留列表类型；`.cmd` 改 `-File` + 脚本自提权 + 日志（以前嵌套引号让 UAC 什么都没跑）；`一键安装全部.cmd` / `一键撤回全部.cmd`（装前快照、撤回按快照还原、读回校验）；Windows 手册加"实机踩过的坑" | 通过：一键安装 EXIT=0，Windows 全量对账 ✅23 ❌0；物理网卡直连 Anthropic 整段被墙、走 TUN 正常、局域网正常；WebRTC 与 ippure 用户口头确认通过（无截图）；一键撤回 EXIT=0，14 项与装前快照一致，TUN 关闭后直连上网正常；134 例 |
+
+仍为 ℹ️：Windows 上 Clash Verge 2.4.4 不改系统 DNS（保持路由器地址），DNS 走向由 TUN 劫持保证。
