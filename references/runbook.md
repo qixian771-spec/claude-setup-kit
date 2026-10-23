@@ -138,6 +138,7 @@
 |---|---|---|---|---|
 | `mirror_check.py` | 全部 ✅（ℹ️/👉 不计） | 有 ❌ | 有 ❓（要 sudo / 工具缺 / 网络不可达 / `--no-network`） | — |
 | `render.py` | 渲染完成，首行是输出目录 | — | 参数或占位符错误（stderr `[ERROR]`） | — |
+| `next_step.py` | 全部步骤通过，去做 ippure | — | mirror_check 跑不了或 manifest 不一致 | 3 = 打印了待做的步 |
 | `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置缺失/pf.conf 语法 · 74 装后验证失败 · 75 TUN 不在 |
 | `.command` 日志 `EXIT=` | 同上 | | | 2 = 渲染失败，什么都没装 |
 

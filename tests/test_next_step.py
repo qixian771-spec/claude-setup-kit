@@ -126,6 +126,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("ippure", out)
 
+    def test_missing_local_params_is_hinted_and_root_installers_mention_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            manifest.write_bytes((ROOT / "manifest.json").read_bytes())
+            res = Path(tmp) / "r.json"
+            res.write_text(json.dumps(result({"pf.011": "FAIL"})), encoding="utf-8")
+            code, out, _ = self.run_cli("--manifest", str(manifest), "--input", str(res))
+            self.assertIn("没有 mirror.params.json", out)
+            self.assertIn("开机密码", out)
+            (Path(tmp) / "mirror.params.json").write_text("{}", encoding="utf-8")
+            code, out, _ = self.run_cli("--manifest", str(manifest), "--input", str(res))
+            self.assertNotIn("没有 mirror.params.json", out)
+            res.write_text(json.dumps(result({"tool.claude_wall": "FAIL"})), encoding="utf-8")
+            code, out, _ = self.run_cli("--manifest", str(manifest), "--input", str(res))
+            self.assertNotIn("开机密码", out)
+
     def test_bad_manifest_exits_two(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "m.json"

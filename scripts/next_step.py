@@ -100,6 +100,14 @@ def build(step, status, evidence, states, via=None):
 MARK = {PASS: "✅", FAIL: "❌", UNKNOWN: "❓", INFO: "ℹ️", MANUAL: "👉"}
 
 
+def params_hint(manifest_path):
+    local = Path(manifest_path).parent / "mirror.params.json"
+    if local.exists():
+        return None
+    return ("提醒: 仓库根目录没有 mirror.params.json，对账用的是参考机默认参数（出口节点 %s）。"
+            "先按 START.md 第 0 步写入本机的 exit_node 等参数，再看下面的结果。" % json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"])
+
+
 def render(out):
     if out["state"] == "all_passed":
         return "\n".join(["# 全部步骤通过 → 做 ippure 验收", "AI 先运行: " + out["ai_action"], "让用户做: " + out["user_action"],
@@ -119,7 +127,10 @@ def render(out):
     if out.get("ai_action"):
         lines.append("AI 先做: " + out["ai_action"])
     if out.get("installer"):
-        lines.append("让用户双击: " + out["installer"] + ("（日志 installers/logs/%s-*.log，看最后 EXIT=）" % out["log"] if out.get("log") else ""))
+        needs_root = out["installer"].endswith(".command") and out["log"] != "claude-wall"
+        lines.append("让用户双击: " + out["installer"]
+                     + ("（会弹终端要开机密码，输入时不显示字符）" if needs_root else "")
+                     + ("（日志 installers/logs/%s-*.log，看最后 EXIT=）" % out["log"] if out.get("log") else ""))
     if out.get("user_action"):
         lines.append("用户动作: " + out["user_action"])
     if out.get("say"):
@@ -149,7 +160,13 @@ def main(argv=None):
         # KeyError/TypeError: manifest or input JSON missing the expected shape
         print("[ERROR] %s" % exc, file=sys.stderr)
         return 2
-    print(json.dumps(out, ensure_ascii=False, indent=2) if args.json else render(out))
+    hint = params_hint(args.manifest)
+    if hint:
+        out["params_hint"] = hint
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        print(render(out) if not hint else hint + "\n\n" + render(out))
     return out["exit"]
 
 
