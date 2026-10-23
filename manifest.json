@@ -943,5 +943,151 @@
     "chrome_app": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "timezone_win": "Pacific Standard Time"
-  }
+  },
+  "steps_win": [
+    {
+      "id": "S1",
+      "title": "Clash Verge（Windows）：固定出口与 fake-ip DNS",
+      "components": [
+        "clash.core",
+        "clash.mode",
+        "clash.tun",
+        "clash.exit",
+        "clash.rules",
+        "clash.dns",
+        "net.tun_iface",
+        "dns.local53"
+      ],
+      "info": [
+        "dns.system"
+      ],
+      "requires": [],
+      "installer": null,
+      "ai_action": "py -3 scripts\\render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
+      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 右键 → 编辑脚本 → 粘贴 clash-profile.script.js → 激活 → 设置里开 TUN 模式 → 代理页把出口分组选到出口节点",
+      "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置和脚本；你在 Clash Verge 里装服务模式、导入、绑定脚本、开 TUN、选节点。"
+    },
+    {
+      "id": "S2",
+      "title": "Windows 防火墙三套规则",
+      "components": [
+        "wf.enabled",
+        "wf.011",
+        "wf.020"
+      ],
+      "requires": [
+        "S1"
+      ],
+      "precheck": [
+        "net.tun_iface"
+      ],
+      "installer": "installers\\win\\安装防火墙规则.cmd",
+      "log": "win-firewall",
+      "user_action": "确认 Clash 服务模式在运行、TUN 在，再双击 installers\\win\\安装防火墙规则.cmd，UAC 点“是”",
+      "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。同意就双击“安装防火墙规则.cmd”，弹 UAC 点“是”。"
+    },
+    {
+      "id": "S3",
+      "title": "自检守护（计划任务）",
+      "components": [
+        "task.watch",
+        "watch.fresh"
+      ],
+      "requires": [
+        "S2"
+      ],
+      "installer": "installers\\win\\安装自检守护.cmd",
+      "log": "win-watch",
+      "user_action": "双击 installers\\win\\安装自检守护.cmd，UAC 点“是”",
+      "say": "装自检守护：每分钟检查防火墙规则、TUN、Clash 模式与出口，有问题弹消息。双击“安装自检守护.cmd”。"
+    },
+    {
+      "id": "S4",
+      "title": "IPv6 守护",
+      "components": [
+        "net.ipv6_off",
+        "task.ipv6"
+      ],
+      "requires": [],
+      "installer": "installers\\win\\安装IPv6守护.cmd",
+      "log": "win-ipv6",
+      "user_action": "双击 installers\\win\\安装IPv6守护.cmd，UAC 点“是”",
+      "say": "把物理网卡的 IPv6 解绑并用计划任务守住。双击“安装IPv6守护.cmd”。"
+    },
+    {
+      "id": "S5",
+      "title": "Chrome / Edge 策略",
+      "components": [
+        "chrome.policy",
+        "reg.edge"
+      ],
+      "manual": [
+        "browser.webrtc"
+      ],
+      "requires": [],
+      "installer": "installers\\win\\Chrome策略.reg",
+      "user_action": "双击 installers\\win\\Chrome策略.reg 和 Edge策略.reg 各导入一次（UAC + 确认）；然后 Chrome/Edge 完全退出重开，打开 chrome://policy（edge://policy）截图，打开 assets\\webrtc-test.html 截图",
+      "say": "给 Chrome 和 Edge 各导入一个注册表策略文件（关 WebRTC 直连和浏览器自带 DoH）：双击 Chrome策略.reg、Edge策略.reg，各点一次“是”；然后把浏览器完全退出再打开。"
+    },
+    {
+      "id": "S6",
+      "title": "体检工具 claude-wall.ps1",
+      "components": [
+        "tool.claude_wall_ps"
+      ],
+      "requires": [],
+      "installer": "installers\\win\\安装体检工具.cmd",
+      "log": "win-tools",
+      "user_action": "双击 installers\\win\\安装体检工具.cmd（不需要管理员）",
+      "say": "装体检脚本，以后在 PowerShell 里跑它就能看防护状态。双击“安装体检工具.cmd”，不用密码。"
+    },
+    {
+      "id": "S7",
+      "title": "系统时区（语言可选）",
+      "components": [
+        "sys.timezone"
+      ],
+      "info": [
+        "sys.language"
+      ],
+      "requires": [],
+      "installer": "installers\\win\\设置时区.cmd",
+      "log": "win-timezone",
+      "user_action": "双击 installers\\win\\设置时区.cmd（UAC），或 设置 → 时间和语言 → 日期和时间 手动选",
+      "say": "把系统时区改成节点所在的时区：双击“设置时区.cmd”。语言顺序可改可不改，你定。"
+    },
+    {
+      "id": "S8",
+      "title": "实测：出口与 DNS 上游",
+      "components": [
+        "net.exit_ip",
+        "dns.upstream"
+      ],
+      "requires": [
+        "S1"
+      ],
+      "installer": null,
+      "ai_action": "py -3 scripts\\mirror_check.py --only net.exit_ip,dns.upstream",
+      "say": "我用公开的第三方检测点测一下出口和 DNS（不碰 Anthropic 的地址）。"
+    },
+    {
+      "id": "S9",
+      "title": "交付：全量对账 + ippure 四项",
+      "components": [],
+      "requires": [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8"
+      ],
+      "installer": null,
+      "ai_action": "py -3 scripts\\mirror_check.py（合计 ❌=0 ❓=0）",
+      "user_action": "用 Chrome 或 Edge 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
+      "say": "清单全部通过。最后请用浏览器打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。"
+    }
+  ]
 }

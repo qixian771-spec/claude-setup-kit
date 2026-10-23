@@ -62,6 +62,17 @@ def main():
         require("| %s |" % step["id"] in appendix, "附录 B 缺步骤 %s" % step["id"])
         for cid in step.get("components", []) + step.get("manual", []) + step.get("info", []):
             require("`%s`" % cid in appendix, "附录 B 缺组件 %s" % cid)
+    win_runbook = (ROOT / "references" / "runbook-windows.md").read_text(encoding="utf-8")
+    win_ids = [c["id"] for c in manifest["components"] if "win32" in c.get("platforms", [])]
+    missing = [i for i in win_ids if "`%s`" % i not in win_runbook]
+    require(not missing, "Windows 手册没有提到这些组件 id: %s" % missing)
+    win_steps = next_step.load_manifest(ROOT / "manifest.json", "win32")["steps"]
+    for step in win_steps:
+        require("## %s " % step["id"] in win_runbook, "Windows 手册缺步骤 %s" % step["id"])
+        if step.get("installer"):
+            require((ROOT / step["installer"].replace("\\", "/")).is_file(), "steps_win.%s 的安装器不存在 %s" % (step["id"], step["installer"]))
+    for name in set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，\"]+)", json.dumps(manifest, ensure_ascii=False))):
+        require((ROOT / "installers" / "win" / name).is_file(), "manifest 提到的 installers\\win\\%s 不存在" % name)
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     require("发给 AI 的一段话" in readme and "START.md" in readme, "README 必须有“发给 AI 的一段话”并指向 START.md")
     start = (ROOT / "START.md").read_text(encoding="utf-8")
@@ -89,6 +100,14 @@ def main():
         subprocess.run(["bash", "-n", str(path)], check=True)
         require(path.stat().st_mode & 0o100, "%s 不可执行" % path.name)
         counts["command"] += 1
+    counts["ps1"] = 0
+    for path in sorted((ROOT / "system-win").rglob("*.ps1")):
+        raw = path.read_bytes()
+        require(raw.startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM" % path.name)
+        require(not re.search("[“”]", raw.decode("utf-8-sig")), "%s 不能含 “ ”（PowerShell 当字符串分隔符）" % path.name)
+        counts["ps1"] += 1
+    for path in sorted((ROOT / "installers" / "win").glob("*.cmd")):
+        require(b"\r\n" in path.read_bytes(), "%s 需要 CRLF" % path.name)
     # No machine-specific values in the shipped templates.
     for path in list((ROOT / "system").rglob("*")) + list((ROOT / "templates").rglob("*")):
         if path.is_file() and "vendor" not in path.parts:

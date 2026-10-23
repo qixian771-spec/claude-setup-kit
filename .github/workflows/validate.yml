@@ -17,7 +17,13 @@ jobs:
             python: '3.12'
           - os: macos-14
             python: '3.12'
+          - os: windows-2022
+            python: '3.12'
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Git Bash on Windows, so "bash"/"sh" are the Git ones and the smoke steps share one syntax.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,3 +47,22 @@ jobs:
           done
           sudo pfctl -n -a test/mirror -f "$RUNNER_TEMP/render-leak-guard/system/pf.anchors/local.leak-guard"
           plutil -lint installers/Chrome策略.mobileconfig "$RUNNER_TEMP"/render-*/system/LaunchDaemons/*.plist
+      - name: Native read-only smoke (Windows only)
+        if: runner.os == 'Windows'
+        # No component is installed on the runner: mirror_check must report ❌/❓ cleanly, the Windows
+        # scripts must parse, render must work with the runner's adapter, and claude-wall.ps1 must run read-only.
+        run: |
+          svc=$(powershell -NoProfile -Command "(Get-NetAdapter | Where-Object Status -eq Up | Select-Object -First 1).Name")
+          echo "adapter on runner: $svc"
+          printf '{"network_services": ["%s"]}\n' "$svc" > mirror.params.json
+          code=0; python scripts/mirror_check.py --no-network || code=$?
+          test "$code" -eq 1 -o "$code" -eq 2
+          code=0; python scripts/next_step.py --no-network || code=$?
+          test "$code" -eq 3
+          for c in win-firewall win-tasks win-tools clash-skip; do
+            [ "$c" = clash-skip ] && continue
+            python scripts/render.py --component "$c" --out "$RUNNER_TEMP/render-$c" >/dev/null
+          done
+          powershell -NoProfile -Command '$e=0; Get-ChildItem -Recurse -Filter *.ps1 "$env:RUNNER_TEMP" | ForEach-Object { $t=$null;$err=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$err) | Out-Null; if ($err) { Write-Output ("PARSE FAIL " + $_.FullName); $e=1 } }; exit $e'
+          code=0; powershell -NoProfile -ExecutionPolicy Bypass -File "$RUNNER_TEMP/render-win-tools/system-win/tools/claude-wall.ps1" status || code=$?
+          test "$code" -eq 6 -o "$code" -eq 1

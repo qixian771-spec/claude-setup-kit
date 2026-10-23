@@ -29,7 +29,7 @@ START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走�
 | `installers/Chrome策略.mobileconfig` | Chrome WebRTC/DoH 策略描述文件（手工写 Managed Preferences 会被系统清掉） |
 | `assets/webrtc-test.html` | 本地 WebRTC 候选检查 |
 | `tools/check.py`、`tools/redact_check.py` | 打包检查；脱敏扫描（公网 IP、UUID、凭据、私人路径 0 命中才能提交） |
-| [references/runbook.md](references/runbook.md) | Mac 路线 S1–S12 的逐步手册与 22 条情景推演 |
+| [references/runbook.md](references/runbook.md) / [runbook-windows.md](references/runbook-windows.md) | Mac 路线 S1–S12、Windows 路线 S1–S9 的逐步手册与情景推演 |
 | [references/ippure-acceptance.md](references/ippure-acceptance.md) | 最终以 <https://ippure.com/claude.html> 四项为验收 |
 
 ## 快速验证
@@ -48,4 +48,4 @@ python3 -m unittest discover -s tests && python3 tools/check.py && python3 tools
 
 ## 边界
 
-不改硬件指纹、不保证账号不被风控；Windows 10/11 版本在计划中（见 docs/release-tasks.md）；Firefox 没有策略模板（只有 PF UID 规则兜底）；Claude 走共用 CDN 的域名靠 Clash 规则而不是 PF。每一步做不到的事都要在交付里写明。
+不改硬件指纹、不保证账号不被风控；Windows 10/11 走 [Windows 手册](references/runbook-windows.md)（防火墙规则 + 计划任务 + 注册表策略，不做精确 IP 更新器）；Firefox 没有策略模板（只有 PF UID 规则兜底）；Claude 走共用 CDN 的域名靠 Clash 规则而不是 PF。每一步做不到的事都要在交付里写明。

@@ -104,6 +104,52 @@ class ManifestStepTests(unittest.TestCase):
                 ns.load_manifest(path)
 
 
+class WindowsStepTests(unittest.TestCase):
+    MANIFEST_WIN = ns.load_manifest(ROOT / "manifest.json", "win32")
+    WIN_IDS = [c["id"] for c in MANIFEST_WIN["components"] if "win32" in c.get("platforms", [])]
+
+    def result(self, overrides=None, default="PASS"):
+        items = []
+        for cid in self.WIN_IDS:
+            status = (overrides or {}).get(cid, default)
+            if cid in ("sys.language", "dns.system"):
+                status = "INFO"
+            if cid == "browser.webrtc":
+                status = "MANUAL"
+            items.append({"id": cid, "status": status, "evidence": "e", "next": "n"})
+        return {"items": items}
+
+    def test_windows_steps_cover_every_windows_component(self):
+        seen = []
+        for step in self.MANIFEST_WIN["steps"]:
+            seen += step.get("components", []) + step.get("manual", []) + step.get("info", [])
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(set(seen) | {"os"}, set(self.WIN_IDS))
+        for step in self.MANIFEST_WIN["steps"]:
+            if step.get("installer"):
+                self.assertTrue((ROOT / step["installer"].replace("\\", "/")).is_file(), step["installer"])
+
+    def test_windows_firewall_step_needs_tun_and_clash(self):
+        out = ns.decide(self.MANIFEST_WIN, self.result({"wf.011": "FAIL", "wf.020": "FAIL", "wf.enabled": "FAIL"}))
+        self.assertEqual(out["step"], "S2")
+        self.assertEqual(out["installer"], "installers\\win\\安装防火墙规则.cmd")
+        self.assertEqual(out["precheck"], [{"id": "net.tun_iface", "status": "PASS"}])
+        out = ns.decide(self.MANIFEST_WIN, self.result({"wf.011": "FAIL", "net.tun_iface": "FAIL"}))
+        self.assertEqual(out["step"], "S1")
+
+    def test_windows_all_passed_and_cli_platform_flag(self):
+        self.assertEqual(ns.decide(self.MANIFEST_WIN, self.result())["state"], "all_passed")
+        with tempfile.TemporaryDirectory() as tmp:
+            res = Path(tmp) / "r.json"
+            res.write_text(json.dumps(self.result({"reg.edge": "FAIL"})), encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = ns.main(["--platform", "win32", "--input", str(res)])
+            self.assertEqual(code, 3)
+            self.assertIn("现在做：S5", out.getvalue())
+            self.assertIn("Chrome策略.reg", out.getvalue())
+
+
 class CliTests(unittest.TestCase):
     def test_platform_key_falls_back_to_macos_tables(self):
         with unittest.mock.patch.object(sys, "platform", "linux"):

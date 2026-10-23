@@ -61,6 +61,23 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("sys.language", text)
 
 
+class WindowsDocTests(unittest.TestCase):
+    RUNBOOK_WIN = (ROOT / "references" / "runbook-windows.md").read_text(encoding="utf-8")
+
+    def test_windows_runbook_names_every_windows_component(self):
+        for comp in MANIFEST["components"]:
+            if "win32" in comp.get("platforms", []):
+                self.assertIn("`%s`" % comp["id"], self.RUNBOOK_WIN, comp["id"])
+
+    def test_windows_runbook_has_nine_steps_and_service_mode_rule(self):
+        self.assertEqual(re.findall(r"^## (S\d+) ", self.RUNBOOK_WIN, re.M), ["S%d" % i for i in range(1, 10)])
+        self.assertIn("服务模式", self.RUNBOOK_WIN)
+        for name in ("安装防火墙规则.cmd", "安装自检守护.cmd", "安装IPv6守护.cmd", "Chrome策略.reg", "Edge策略.reg", "安装体检工具.cmd", "设置时区.cmd"):
+            self.assertIn(name, self.RUNBOOK_WIN, name)
+        self.assertIn("runbook-windows.md", SKILL)
+        self.assertIn("py -3", (ROOT / "START.md").read_text(encoding="utf-8"))
+
+
 class PackagingTests(unittest.TestCase):
     def test_check_passes(self):
         out = io.StringIO()

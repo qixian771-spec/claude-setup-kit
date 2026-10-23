@@ -89,7 +89,7 @@ class LauncherTests(unittest.TestCase):
             self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM（Windows PowerShell 5.1）" % ps1.name)
             # PowerShell treats “ ” as string delimiters: Chinese quotes inside strings must be 「」.
             self.assertNotRegex(raw.decode("utf-8-sig"), "[“”]", ps1.name)
-        manifest_names = set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，]+)", json.dumps(MANIFEST, ensure_ascii=False)))
+        manifest_names = set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，\"]+)", json.dumps(MANIFEST, ensure_ascii=False)))
         self.assertIn("安装防火墙规则.cmd", manifest_names)
         for name in manifest_names:
             self.assertTrue((win / name).is_file(), "manifest 提到的 installers\\win\\%s 不存在" % name)

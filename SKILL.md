@@ -33,7 +33,7 @@ license: MIT
 | 不知道用户要什么 / 刚拿到链接 | 读 [START.md](START.md)，问路线 | [START.md](START.md) |
 | 看看这台机器现在差什么 | `python3 scripts/mirror_check.py`（`--json` 给 AI 解析；`--only id,id` 单项） | [手册 G1](references/runbook.md#g1-摸底只读) |
 | 现在该做哪一步 | `python3 scripts/next_step.py`（退出 3 = 打印了待做步；0 = 全过，去 ippure） | [手册](references/runbook.md) 对应步 |
-| 从零配到和参考机一样 | 手册 S1–S12 顺序执行 | [执行手册](references/runbook.md) |
+| 从零配到和参考机一样 | 手册 S1–S12 顺序执行（Windows：S1–S9） | [执行手册](references/runbook.md) / [Windows 手册](references/runbook-windows.md) |
 | 只装某一个组件 | `installers/安装<组件>.command`（用户双击）→ 读 `installers/logs/` | [手册 S2–S9](references/runbook.md#s2-claude-直连墙010) |
 | 把 Clash 配置做成和参考机一样 | `python3 scripts/render.py --component clash --nodes <节点参数.json>` → 导入 Clash Verge | [手册 S1](references/runbook.md#s1-clash-verge) |
 | 卸掉某个组件 | `installers/卸载.command`（用户双击，输入组件名） | [手册附录 A](references/runbook.md#附录-a卸载与回滚) |
@@ -51,5 +51,5 @@ license: MIT
 
 ## 能做与不能做
 
-能：按清单把 Clash 配置、PF 三道墙、守护、更新器、IPv6 守护、Chrome 描述文件、时区装成参考机那样，并逐项证明。
+能：按清单把 Clash 配置、PF 三道墙（Windows：防火墙三套规则）、守护、更新器（仅 macOS）、IPv6 守护、Chrome 描述文件（Windows：Chrome/Edge 注册表策略）、时区装成参考机那样，并逐项证明。
 不能：建节点（去 vps 仓库）、清账号数据（去 reset 仓库）、改硬件指纹、保证账号不被风控、覆盖 Safari 以外的浏览器策略（Safari 靠 PF UID 规则，Firefox 未覆盖）。

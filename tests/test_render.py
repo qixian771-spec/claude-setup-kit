@@ -182,7 +182,8 @@ class ComponentTests(RenderFixture):
         self.assertFalse((out / "system/updater/sha256.json").exists())  # generated at install time
         render.render_component("direct-wall", self.values(), self.root / "dw")
         mode = (self.root / "dw/system/libexec/claude-direct-wall").stat().st_mode
-        self.assertTrue(mode & stat.S_IXUSR)
+        if sys.platform != "win32":  # NTFS has no execute bit
+            self.assertTrue(mode & stat.S_IXUSR)
 
     def test_output_dir_must_not_exist(self):
         out = self.root / "exists"
