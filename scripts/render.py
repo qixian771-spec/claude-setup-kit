@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Render the {{PLACEHOLDER}} templates under system/ and templates/ for THIS Mac.
+"""Render the {{PLACEHOLDER}} templates under system/, system-win/ and templates/ for THIS machine (macOS or Windows).
 
 Writes only into the --out directory (default build/<component>-<UTC stamp>/, which must not
 exist yet). Never touches /etc, /Library or the user's home. The installers in installers/lib
-take the rendered directory as their only argument. Runs on the macOS system Python (3.9+).
+take the rendered directory as their only argument. Runs on the macOS system Python (3.9+) or Windows `py -3` (3.9+).
 
 Values come from three places, later ones win:
   1. manifest.json params (tun_device, tun_inet4, exit_group, exit_node, network_services, ipv6_guard_label)

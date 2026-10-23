@@ -1021,7 +1021,7 @@
       "installer": "installers\\win\\一键安装全部.cmd",
       "log": "一键安装全部",
       "user_action": "确认 Clash 服务模式在运行、TUN 在，再双击 installers\\win\\一键安装全部.cmd（一次 UAC 装完 S2–S7，失败即停，可续跑）；也可以按组件单独双击",
-      "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。同意就双击“安装防火墙规则.cmd”，弹 UAC 点“是”。"
+      "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。同意就双击“一键安装全部.cmd”（一次 UAC 把 S2–S7 装完；要分步装就双击“安装防火墙规则.cmd”），弹 UAC 点“是”。"
     },
     {
       "id": "S3",

@@ -1,6 +1,6 @@
 # 执行手册（Windows 10/11）：把一台 Windows 配成参考机的等价物
 
-与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts\mirror_check.py --only <id>` 的输出原文；`py -3 scripts\next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（25 个），`mirror_check` 在 Windows 上自动只跑这些。
+与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts\mirror_check.py --only <id>` 的输出原文；`py -3 scripts\next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（27 个），`mirror_check` 在 Windows 上自动只跑这些。
 
 执行主体是 AI；👤 的动作由用户做（双击 `.cmd`/`.reg`、UAC 点"是"、在 Clash Verge / 设置里点、截图）。所有 `.cmd` 都把输出写到 `installers\logs\<名字>-<随机>.log`，最后一行 `EXIT=`。
 
@@ -76,6 +76,8 @@ py -3 scripts\mirror_check.py --no-network
 对账：`--only wf.enabled,wf.011,wf.020`；再 `--only net.exit_ip,dns.upstream` 证明装墙后代理路径还通。
 停止：日志里 `已存在，拒绝覆盖` → 先对账，✅ 不用装；`Clash Verge 服务模式没有在运行` / `TUN 适配器 … 不在` → 回 S1；`找不到网卡` → `mirror.params.json` 的 `network_services` 改成 `网络连接` 里的名字。
 
+> 用过 `一键安装全部.cmd` 的机器，S2–S7 的组件已经 ✅，`next_step` 不会再指到这几步；下面 S3–S7 的单独安装器只在分步安装或补装某一项时用。补装时日志里 `已存在，拒绝覆盖` 不是错误：先对账，✅ 就不用装。
+
 ## S3 自检守护
 
 组件：`task.watch watch.fresh`。前置：S2。
@@ -94,7 +96,7 @@ py -3 scripts\mirror_check.py --no-network
 
 ## S6 体检工具
 
-组件：`tool.claude_wall_ps`。👤 双击 `installers\win\安装体检工具.cmd`（无 UAC）。日志里会直接跑一次 `status`：装齐 S2–S4 前退出码 6/1 是正常的。对账：`--only tool.claude_wall_ps`。
+组件：`tool.claude_wall_ps`。👤 双击 `installers\win\安装体检工具.cmd`（无 UAC）。以后查状态在 PowerShell 里跑 `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\claude-setup-kit\claude-wall.ps1" status`（带 `-ExecutionPolicy Bypass` 是因为默认执行策略会拦 .ps1）。日志里会直接跑一次 `status`：装齐 S2–S4 前退出码 6/1 是正常的。对账：`--only tool.claude_wall_ps`。
 
 ## S7 系统时区（语言可选）
 
@@ -125,7 +127,7 @@ py -3 scripts\mirror_check.py --no-network
 | 弱模型在 Windows 上用 `python3 scripts/...` 报错 | 改 `py -3 scripts\...` | 让用户装别的 Python |
 | 控制台中文乱码 | `.cmd` 已 `chcp 65001`；脚本自己把 stdout 设为 UTF-8 | 把输出改成英文凑合 |
 | `dns.system` 显示 ℹ️ | 正常：Windows 的受管 DNS 值只记录，真实路径看 `dns.local53` | 当 ❌ 去改 DNS |
-| 用户这台是游戏机（LOL/PUBG、加速器） | 推荐往返：一键安装 → 对账/ippure → 一键撤回；长期只留 Clash 规则模式 + 浏览器策略 | 长期装 user-public 规则（会拦游戏和加速器的直连） |
+| 用户这台是游戏机（LOL/PUBG、加速器） | 让用户二选一并记下来：**(a) 用 Claude 时**一键安装 + 开 TUN，**打游戏前**一键撤回 + 关 TUN（每次往返约 1 分钟，防护最全）；**(b) 不想来回切**就不装防火墙规则，只留 Clash 规则模式 + 浏览器策略 + 时区（没有物理网卡墙，`wf.*` 永远 ❌，交付时写明） | 长期装 user-public 规则又开着加速器（会拦游戏和加速器的直连） |
 | 用户要求在 Windows 上也做精确 IP 更新器 | 说明 Windows 侧只做整段墙 + Clash 域名规则（决定见 docs/release-tasks.md） | 移植 macOS 的更新器 |
 
 ## 附录 A：卸载

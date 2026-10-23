@@ -753,9 +753,25 @@ class CliTests(unittest.TestCase):
     def test_json_shape(self):
         code, out = run(FakeHost(), "--json", "--only", "os")
         data = json.loads(out)
-        self.assertEqual(set(data), {"generated_utc", "manifest", "platform", "params", "exit", "items"})
+        self.assertEqual(set(data), {"generated_utc", "manifest", "platform", "params", "note", "exit", "items"})
         self.assertEqual(data["items"][0]["id"], "os")
         self.assertNotIn("next", data["items"][0])
+
+    def test_missing_params_file_is_announced_in_the_header(self):
+        # A stranger's machine without mirror.params.json is compared against the reference node; the text and the
+        # JSON both say so up front instead of leaving it to next_step.
+        local = Path(MANIFEST).parent / "mirror.params.json"
+        self.assertFalse(local.exists())
+        code, out = run(FakeHost(), "--only", "os")
+        self.assertIn("提醒: 仓库根目录没有 mirror.params.json", out.splitlines()[1])
+        _, jout = run(FakeHost(), "--json", "--only", "os")
+        self.assertIn("mirror.params.json", json.loads(jout)["note"])
+        local.write_text(json.dumps({"exit_node": "丽萨美国"}), encoding="utf-8")
+        try:
+            code, out = run(FakeHost(), "--only", "os")
+            self.assertNotIn("提醒:", out)
+        finally:
+            local.unlink()
 
     def test_failing_item_carries_next(self):
         host = FakeHost()

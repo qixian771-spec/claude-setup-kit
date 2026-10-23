@@ -1,6 +1,6 @@
 # 执行手册：把一台 Mac 配成参考机
 
-流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 36 个在附录 B 对照表里。
+流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 38 个在附录 B 对照表里。
 
 执行主体是 AI；只有标了 👤 的动作要用户亲自做（双击 `.command`、输密码、在 Clash Verge / 系统设置里点按钮、截图）。AI 渲染、读日志、对账、交付。
 
@@ -143,7 +143,7 @@
 | `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置缺失/pf.conf 语法 · 74 装后验证失败 · 75 TUN 不在 |
 | `.command` 日志 `EXIT=` | 同上 | | | 2 = 渲染失败，什么都没装 |
 
-`[OK]` 出现过不代表后面没失败，看最后的 `EXIT=`。
+`[OK]` 出现过不代表后面没失败，看最后的 `EXIT=`。`.command` 日志里过滤掉了含 `ALTQ` 的行：那是 macOS `pfctl` 每次都打印的 "No ALTQ support in kernel" 噪音，不是错误；其他输出一行不漏。
 
 ## 4. 情景推演（文档推演，不是演示指令）
 

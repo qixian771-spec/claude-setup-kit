@@ -497,7 +497,7 @@ def check_system_dns(host, p, a):
     bad = {s: v for s, v in found.items() if not v or not set(v) <= accept}
     if bad:
         return FAIL, "不在接受列表 %s: %s" % (sorted(accept), bad)
-    return PASS, "%s（接受值; 真实路径由 dns.local53 与 pf.020 保证）" % found
+    return PASS, "%s（接受值：114.114.114.114 是 Clash Verge 开 TUN 时自己写进网卡的，不是泄露；真实路径由 dns.local53 与 pf.020 保证）" % found
 
 
 def _hardware_device(host, service):
@@ -619,7 +619,7 @@ def check_launch_daemon(host, p, a):
     accept = a.get("accept_exit", [0])
     if m and code not in accept:
         return FAIL, "%s 最近退出码 %s（接受 %s）" % (label, code, accept)
-    return PASS, "已装载，最近退出码 %s" % (code if m else "未运行过")
+    return PASS, "已装载，最近退出码 %s%s" % (code if m else "未运行过", "（1 = 它保守停止，属接受值 %s，正常）" % accept if m and code == 1 else "")
 
 
 def _parse_iso(value):
@@ -834,8 +834,11 @@ def exit_code(items):
     return 0
 
 
-def render(items, params, code, platform="darwin"):
-    lines = ["# mirror-check  平台=%s 出口分组=%s 节点=%s TUN=%s" % (platform, params["exit_group"], params["exit_node"], params["tun_device"]), ""]
+def render(items, params, code, platform="darwin", note=None):
+    lines = ["# mirror-check  平台=%s 出口分组=%s 节点=%s TUN=%s" % (platform, params["exit_group"], params["exit_node"], params["tun_device"])]
+    if note:
+        lines.append("提醒: " + note)
+    lines.append("")
     for i in items:
         lines.append("%s %-16s %s" % (MARK[i["status"]], i["id"], i["title"]))
         lines.append("    %s" % i["evidence"])
@@ -883,6 +886,7 @@ def main(argv=None, host=None):
     manifest = load_manifest(args.manifest, host.platform)
     params = dict(manifest["params"])
     local = Path(args.manifest).parent / "mirror.params.json"
+    note = None if local.exists() else "仓库根目录没有 mirror.params.json，下面用的是参考机的默认参数（出口节点 %s）；节点名不同的机器先按 START.md 第 0 步写入，否则 ✅/❌ 不作数。" % params["exit_node"]
     if local.exists():
         # Per-machine overrides (git-ignored); same keys as manifest params. Values keep their JSON type
         # (lists stay lists — going through "k=v" strings would turn ["以太网"] into "['以太网']").
@@ -903,9 +907,9 @@ def main(argv=None, host=None):
     code = exit_code(items)
     if args.json:
         print(json.dumps({"generated_utc": host.now().isoformat(), "manifest": args.manifest, "platform": host.platform,
-                          "params": params, "exit": code, "items": items}, ensure_ascii=False, indent=2))
+                          "params": params, "note": note, "exit": code, "items": items}, ensure_ascii=False, indent=2))
     else:
-        print(render(items, params, code, host.platform))
+        print(render(items, params, code, host.platform, note))
     return code
 
 

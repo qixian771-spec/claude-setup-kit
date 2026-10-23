@@ -6,7 +6,7 @@ license: MIT
 
 # Claude 环境总入口与 Mac 环境镜像
 
-用户只发这一个仓库的链接。**先读 [START.md](START.md)**：它让你问用户要走哪条路线（A 建节点 → 克隆 vps 仓库；B 配 Mac → 本仓库；C 清理重置 → 克隆 reset 仓库；D 全套），并规定各路线的产出与交回。本页其余部分是 B 路线（把一台 Mac 配成和参考机一样）的入口：清单是 [manifest.json](manifest.json)（36 个组件、12 个步骤），对账命令是 `python3 scripts/mirror_check.py`，`python3 scripts/next_step.py` 会告诉你现在该做哪一步；它们的输出是唯一算数的证据，**不靠 AI 自己说"做好了"**。
+用户只发这一个仓库的链接。**先读 [START.md](START.md)**：它让你问用户要走哪条路线（A 建节点 → 克隆 vps 仓库；B 配 Mac → 本仓库；C 清理重置 → 克隆 reset 仓库；D 全套），并规定各路线的产出与交回。本页其余部分是 B 路线（把一台 Mac 配成和参考机一样）的入口：清单是 [manifest.json](manifest.json)（Mac 38 个组件、12 个步骤；Windows 27 个组件、9 个步骤），对账命令是 `python3 scripts/mirror_check.py`，`python3 scripts/next_step.py` 会告诉你现在该做哪一步；它们的输出是唯一算数的证据，**不靠 AI 自己说"做好了"**。
 
 ## 三个仓库分工（别混）
 
@@ -18,7 +18,7 @@ license: MIT
 
 ## 必须先读与执行顺序
 
-**先读 [执行手册](references/runbook.md)**。它把 36 个组件排成 12 步，每步固定为：进入条件 → 动作（命令或让用户双击哪个文件）→ 读哪份日志 → 贴 `mirror_check --only <id>` 的输出 → 才能进下一步。带不懂技术的用户时，按 [对话模板](references/conversation.md) 说话和停顿。最后按 [ippure 验收](references/ippure-acceptance.md) 做四项检测。
+**先读 [执行手册](references/runbook.md)**。它把 Mac 的 38 个组件排成 12 步，每步固定为：进入条件 → 动作（命令或让用户双击哪个文件）→ 读哪份日志 → 贴 `mirror_check --only <id>` 的输出 → 才能进下一步。带不懂技术的用户时，按 [对话模板](references/conversation.md) 说话和停顿。最后按 [ippure 验收](references/ippure-acceptance.md) 做四项检测。
 
 1. 按 START.md 问路线；提取节点来源、出口分组与节点名、已有授权；沿用已给信息，不重复问。
 2. 先跑一次 `python3 scripts/mirror_check.py`（只读，不需要 sudo 也能跑大部分项），拿到现状表再决定做哪些步。

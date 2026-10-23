@@ -10,7 +10,7 @@
 
 | 部分 | 仓库 | 管什么 |
 |---|---|---|
-| 总入口 + Mac 环境镜像 | **本仓库** | `START.md` 选路；`manifest.json` 36 个组件；`mirror_check.py` 只读对账；`next_step.py` 告诉 AI 现在做什么；Clash 配置模板、PF 三道墙、守护、更新器、IPv6 守护、Chrome 描述文件的双击安装器；ippure 验收 |
+| 总入口 + Mac 环境镜像 | **本仓库** | `START.md` 选路；`manifest.json` 45 个组件（Mac 38、Windows 27）；`mirror_check.py` 只读对账；`next_step.py` 告诉 AI 现在做什么；Clash 配置模板、PF 三道墙、守护、更新器、IPv6 守护、Chrome 描述文件的双击安装器；ippure 验收 |
 | 建节点 | [vps-node-rebuild-3xui](https://github.com/qixian771-spec/vps-node-rebuild-3xui) | VPS、3x-ui、VLESS-REALITY 节点部署与验收 |
 | 清理重置 | [claude-client-full-reset](https://github.com/qixian771-spec/claude-client-full-reset) | Claude 本地数据与标识清理、清理前后 ID 快照对比、遥测开关与分流补齐 |
 
@@ -21,7 +21,7 @@ START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走�
 | 东西 | 作用 |
 |---|---|
 | `START.md` | AI 的总手册：先问什么、四条路线、产出与交回、交付清单 |
-| `manifest.json` | 36 个组件的契约（怎么验证、失败下一步）+ 12 个步骤的顺序、前置、安装器、对用户说的话 |
+| `manifest.json` | 45 个组件（Mac 38 / Windows 27）的契约（怎么验证、失败下一步）+ 12 个步骤的顺序、前置、安装器、对用户说的话 |
 | `scripts/mirror_check.py` | 一条命令只读对账，✅/❌/❓/ℹ️/👉 表与退出码 0/1/2 |
 | `scripts/next_step.py` | 读对账结果，按步骤顺序打印"现在做什么"；全过时打印 ippure 验收任务 |
 | `scripts/render.py` | 把 `system/`、`templates/` 的占位符模板按本机参数渲染到独立目录 |

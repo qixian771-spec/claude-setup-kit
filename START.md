@@ -12,7 +12,7 @@ cd claude-setup-kit
 python3 scripts/mirror_check.py
 ```
 
-Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mirror_check.py`）。
+Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mirror_check.py`）。Windows 需要先装两样：**Git for Windows**（<https://git-scm.com/download/win>，默认选项即可）和 **Python 3.9+**（<https://www.python.org/downloads/windows/>，安装时勾上 *py launcher*）；装好后在 PowerShell 里 `git --version` 和 `py -3 --version` 都有输出才继续。装这两样让用户自己点安装包。
 
 问到出口节点名后，立刻把它写进仓库根目录的 `mirror.params.json`（git 忽略；参考机还要 `"ipv6_guard_label"`，其他机器一般不用）：
 
@@ -20,7 +20,9 @@ Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mi
 {"exit_node": "<出口节点名>"}
 ```
 
-没有这个文件时 `mirror_check` 会用 manifest 里参考机的默认值对账，`next_step` 会提醒你。
+没有这个文件时 `mirror_check` 和 `next_step` 都会在第一行提醒你——那时的 ✅/❌ 是对着参考机的节点名算的，不作数。Windows 机器还要写网卡名：`{"exit_node": "<出口节点名>", "network_services": ["以太网"]}`（名字照『网络连接』里显示的，中文系统通常是 `以太网` / `WLAN`）。
+
+退出码的意思：`mirror_check` 0 = 全 ✅，1 = 有 ❌，2 = 有 ❓；`next_step` **3 = 正常，打印了现在要做的那一步**，0 = 全部步骤通过去做 ippure，2 = 跑不了（manifest 不一致或 mirror_check 崩了）。看到 3 不是失败。
 
 然后问用户一句话（已经说过的不要再问）："你要的是哪种：**A 建节点**（还没有可用节点）、**B 配这台 Mac**（已有节点）、**C 清理重置 / 换账号 / 补遥测开关**、**D 全套从零**？" 以及出口节点名、是否同意装防火墙规则与描述文件、是否同意关 IPv6。
 
