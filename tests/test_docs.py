@@ -88,6 +88,21 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(check.main(), 0)
         self.assertIn("PASS", out.getvalue())
 
+    def test_check_without_git_bash_skips_loudly(self):
+        # A Windows box with no Git Bash cannot parse the macOS .sh/.command files: the check must say so in its
+        # output (SKIPPED line) rather than crash on the WSL launcher or stay silent.
+        out = io.StringIO()
+        real = check.shell_path
+        check.shell_path = lambda name: None
+        try:
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(check.main(), 0)
+        finally:
+            check.shell_path = real
+        self.assertIn("PASS", out.getvalue())
+        self.assertIn("SKIPPED", out.getvalue())
+        self.assertIn("Git Bash", out.getvalue())
+
     def test_readme_paragraph_names_the_entry_and_the_rules(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         para = readme.split("发给 AI 的一段话", 1)[1].split("\n## ", 1)[0]

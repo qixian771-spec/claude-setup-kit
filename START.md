@@ -4,6 +4,8 @@
 
 ## 0. 先做三件事
 
+**先确认能打开 GitHub**：在国内没有任何代理时 `github.com` 多半连不上（连接被重置或超时），`git clone` 会在第一步就卡住。用户已经有 Clash/节点的，让他们先把 Clash 的**系统代理**打开再克隆（这不违反"出口不切换"——这里只是开关系统代理，不动节点）。完全没有代理、也没有节点的新机器（A 路线从零）拿不到仓库，让用户用能上网的手机或另一台电脑在 GitHub 页面点 **Code → Download ZIP**，把 zip 拷过来解压，之后所有命令一样跑（`mirror_check`、`next_step` 不依赖 git）。不要自己找第三方镜像站替用户下载。
+
 ```sh
 git clone https://github.com/qixian771-spec/claude-setup-kit
 cd claude-setup-kit

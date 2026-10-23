@@ -11,17 +11,40 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _git_shell(name):
+    """Windows: the bash/sh that ships with Git for Windows, even when Git is not on PATH. System32\\bash.exe is the
+    WSL launcher (FileNotFoundError / "系统找不到指定的文件" when WSL is absent) and is never used."""
+    import os
+    roots = [os.environ.get("ProgramFiles"), os.environ.get("ProgramW6432"), os.environ.get("ProgramFiles(x86)"),
+             os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")]
+    git = shutil.which("git")
+    if git:
+        roots.insert(0, str(Path(git).resolve().parents[1]))  # <Git>\cmd\git.exe or <Git>\bin\git.exe
+    for root in roots:
+        if not root:
+            continue
+        for sub in ("bin", "usr\\bin", "Git\\bin", "Git\\usr\\bin"):
+            candidate = Path(root) / sub / (name + ".exe")
+            if candidate.exists():
+                return str(candidate)
+    found = shutil.which(name)
+    if found and "system32" not in found.lower():
+        return found
+    return None
+
+
+def shell_path(name):
+    """Path of bash or sh for `-n` syntax checks; None (never the WSL launcher) when Windows has no Git Bash."""
+    if sys.platform == "win32":
+        return _git_shell(name)
+    found = shutil.which(name)
+    if not found:
+        raise ValueError("找不到 %s（语法检查需要）" % name)
+    return found
+
+
 def bash_path():
-    """On Windows a bare "bash" can be the WSL launcher in System32; use the bash next to Git's sh."""
-    sh = shutil.which("sh")
-    bash = shutil.which("bash")
-    if sys.platform == "win32" and sh:
-        candidate = Path(sh).with_name("bash.exe")
-        if candidate.exists():
-            return str(candidate)
-    if not bash:
-        raise ValueError("找不到 bash（语法检查需要）")
-    return bash
+    return shell_path("bash")
 
 
 def require(condition, message):
@@ -116,14 +139,22 @@ def main():
     for path in shell_files:
         text = path.read_text(encoding="utf-8")
         require(not bad_var.search(text), "%s: $变量 后面紧跟非 ASCII 字符要写成 ${变量}" % path.relative_to(ROOT))
+    sh, bash = shell_path("sh"), shell_path("bash")
+    skipped = []
+    if not sh or not bash:
+        # Loud, not silent: the .sh/.command files are macOS installers; on a Windows box without Git Bash we cannot
+        # parse them, so say so in the PASS line instead of crashing on the WSL launcher.
+        skipped.append("sh 语法检查（Windows 没有 Git Bash，PATH 里的 bash 是 WSL 启动器）")
     for path in sorted((ROOT / "installers" / "lib").glob("*.sh")):
-        subprocess.run([shutil.which("sh") or "sh", "-n", str(path)], check=True)
+        if sh:
+            subprocess.run([sh, "-n", str(path)], check=True)
         text = path.read_text(encoding="utf-8")
         require("set -eu" in text or path.name == "common.sh", "%s 缺 set -eu" % path.name)
         require("|| true" not in text, "%s 不准用 || true 吞错误" % path.name)
         counts["sh"] += 1
     for path in sorted((ROOT / "installers").glob("*.command")):
-        subprocess.run([bash_path(), "-n", str(path)], check=True)
+        if bash:
+            subprocess.run([bash, "-n", str(path)], check=True)
         require(sys.platform == "win32" or path.stat().st_mode & 0o100, "%s 不可执行" % path.name)
         counts["command"] += 1
     counts["ps1"] = 0
@@ -141,6 +172,8 @@ def main():
             for bad in ("/Users/", "utun1024", "user 501"):
                 require(bad not in text, "%s 含机器相关值 %s" % (path.relative_to(ROOT), bad))
     print("PASS: metadata, links, manifest coverage, syntax", counts)
+    for item in skipped:
+        print("SKIPPED（明说，不是通过）: %s" % item)
     print("Operational scripts were not executed; mirror_check and installers are validated separately.")
     return 0
 

@@ -46,10 +46,13 @@ class LauncherTests(unittest.TestCase):
     def test_every_shell_script_parses(self):
         sys.path.insert(0, str(ROOT / "tools"))
         import check as check_tool
+        sh, bash = check_tool.shell_path("sh"), check_tool.shell_path("bash")
+        if not sh or not bash:
+            self.skipTest("Windows 没有 Git Bash（PATH 里的 bash 是 WSL 启动器），跳过 sh 语法检查")
         for path in sorted(self.LIB.glob("*.sh")):
-            subprocess.run([check_tool.shutil.which("sh") or "sh", "-n", str(path)], check=True)
+            subprocess.run([sh, "-n", str(path)], check=True)
         for path in sorted((ROOT / "installers").glob("*.command")):
-            subprocess.run([check_tool.bash_path(), "-n", str(path)], check=True)
+            subprocess.run([bash, "-n", str(path)], check=True)
             if sys.platform != "win32":
                 self.assertTrue(path.stat().st_mode & 0o100, path.name)
 

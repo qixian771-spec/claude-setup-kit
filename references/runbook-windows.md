@@ -40,6 +40,9 @@ foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShor
 | 关了 Clash Verge 窗口再开就起不来 / 卡在验证 | 强杀 `clash-verge.exe` 会留下孤儿 `verge-mihomo.exe`；服务模式的服务也会停 | 不要强杀；必须重来时停掉全部 `clash-verge*`/`verge-mihomo` 进程，再 `Start-Service clash_verge_service`，最后让用户自己双击打开 |
 | `.cmd` 里 UAC 之后什么都没执行 | 嵌套 `-Command "…\"…\"…"` 在 cmd 里被截断 | 已改为 `-File` 调脚本、脚本自提权、自写日志 |
 | `reg import 'Chrome策略.reg'` 报打不开文件 | reg.exe 不认中文路径 | 一键安装直接写注册表值；单独双击 .reg 仍可用 |
+| `git clone` 报 `Connection was reset` / `Failed to connect to github.com` | 没有代理时国内连不上 GitHub（实测关 TUN 后两次失败、curl 15 秒超时） | 先在 Clash Verge 开系统代理再克隆；没有任何代理的机器让用户在别的设备 Download ZIP 拷过来 |
+| `mirror_check` 的 `dns.system`/`net.ipv6_off` 变 ❓ 并吐一段 CIM 错误 | `network_services` 还是默认的 `Ethernet`，中文系统网卡叫 `以太网` | 现在会直接报"网卡不存在（有: …）"；把 `网络连接` 里的名字写进 `mirror.params.json` |
+| 在 PowerShell 里跑 `py -3 tools\check.py` 或测试报 `FileNotFoundError` | PATH 里的 `bash` 是 System32 的 WSL 启动器，Git 没进 PATH | 现在会自动找 Git 自带的 bash；找不到就明说"跳过 sh 语法检查"（这两样是开发者工具，配机流程不需要跑） |
 | 游戏机装了雷神/迅游（WFP 驱动常驻） | 驱动在但加速器不运行时不影响 TUN 和防火墙规则 | 实验期间不开加速器；要打游戏前一键撤回、关 TUN |
 
 ## G0 约束表

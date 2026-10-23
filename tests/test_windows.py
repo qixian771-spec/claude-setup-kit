@@ -30,6 +30,7 @@ class WinHost(FakeHost):
             "os": "Microsoft Windows 10 Pro 10.0.19045\n",
             "tun": "198.18.0.1\n",
             "dns-udp": "198.18.0.50\n", "dns-tcp": "198.18.0.50\n", "dns-system": "198.18.0.50\n",
+            "adapters": "Ethernet\nWLAN\n",
             "sysdns": "198.18.0.2\n",
             "ipv6-binding": "False\n", "ipv6-addr": "",
             "reg-Chrome": json.dumps({"WebRtcIPHandling": "disable_non_proxied_udp", "DnsOverHttpsMode": "off"}),
@@ -97,7 +98,7 @@ class WindowsBaselineTests(unittest.TestCase):
         failing = {k: v["evidence"] for k, v in items.items() if v["status"] not in (mc.PASS, mc.INFO, mc.MANUAL)}
         self.assertEqual(failing, {})
         self.assertEqual(data["platform"], "win32")
-        self.assertEqual(items["dns.system"]["status"], mc.INFO)  # accept list empty until W2
+        self.assertEqual(items["dns.system"]["status"], mc.INFO)  # Clash Verge 2.4.4 leaves the system DNS alone; recorded only
         self.assertEqual(code, 0)
 
     def test_every_windows_query_is_read_only(self):
@@ -122,6 +123,21 @@ class WindowsFailureTests(unittest.TestCase):
         host.ps_outputs["dns-udp"] = "104.16.123.96\n"
         _, items, _ = run_json(host, "--only", "dns.local53")
         self.assertIn("不是 fake-ip", items["dns.local53"]["evidence"])
+
+    def test_wrong_adapter_alias_is_explained_not_a_cim_error(self):
+        # Chinese Windows names the adapter 以太网; the manifest default is Ethernet. The two adapter checks must say
+        # which names exist instead of surfacing Get-DnsClientServerAddress / Get-NetAdapterBinding CIM errors.
+        host = WinHost()
+        host.ps_outputs["adapters"] = "以太网\nWLAN\n"
+        del host.ps_outputs["sysdns"]
+        del host.ps_outputs["ipv6-binding"]
+        _, items, _ = run_json(host, "--only", "dns.system,net.ipv6_off")
+        for cid in ("dns.system", "net.ipv6_off"):
+            self.assertEqual(items[cid]["status"], mc.UNKNOWN, cid)
+            self.assertIn("'Ethernet'", items[cid]["evidence"])
+            self.assertIn("以太网", items[cid]["evidence"])
+            self.assertIn("mirror.params.json", items[cid]["evidence"])
+            self.assertNotIn("PowerShell 失败", items[cid]["evidence"])
 
     def test_ipv6_binding_still_enabled(self):
         host = WinHost()

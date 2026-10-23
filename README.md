@@ -4,7 +4,7 @@
 
 ## 发给 AI 的一段话（复制粘贴即可）
 
-> 请打开 https://github.com/qixian771-spec/claude-setup-kit ，先读 START.md，按它说的克隆仓库、运行 `python3 scripts/mirror_check.py`，然后问我要走哪条路线（建节点 / 配这台 Mac / 清理重置 / 全套从零）。之后每一轮都运行 `python3 scripts/next_step.py`，它说什么你就做什么，让我动手的地方按 references/conversation.md 的话术告诉我。硬规则：出口节点不许切换、不许退出 Clash、不许向 Anthropic 地址直连试探；所有要密码的安装由我双击文件完成，你只读日志和对账；每一步都要贴对账输出，不要自己说"做好了"。最后按 references/ippure-acceptance.md 让我截图验收。
+> 请打开 https://github.com/qixian771-spec/claude-setup-kit ，先读 START.md（打不开 GitHub 就先让我把现有的代理打开，比如 Clash 的系统代理，再试；仍然打不开就按 START.md 第 0 步的"拿不到仓库"做），按它说的克隆仓库、运行 `python3 scripts/mirror_check.py`，然后问我要走哪条路线（建节点 / 配这台 Mac / 清理重置 / 全套从零）。之后每一轮都运行 `python3 scripts/next_step.py`，它说什么你就做什么，让我动手的地方按 references/conversation.md 的话术告诉我。硬规则：出口节点不许切换、不许退出 Clash、不许向 Anthropic 地址直连试探；所有要密码的安装由我双击文件完成，你只读日志和对账；每一步都要贴对账输出，不要自己说"做好了"。最后按 references/ippure-acceptance.md 让我截图验收。
 
 ## 它由三部分组成
 

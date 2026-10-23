@@ -67,13 +67,29 @@ def check_dns_local53(host, p, a):
     return PASS, "udp=%s tcp=%s 系统解析=%s（均在 %s）" % (results["udp"], results["tcp"], sys_ips, net)
 
 
+def _missing_adapters(host, p):
+    """Return (missing, available). A wrong alias (manifest default "Ethernet" on a Chinese system whose adapter is
+    "以太网") would otherwise surface as an opaque CIM error from Get-DnsClientServerAddress / Get-NetAdapterBinding."""
+    available = _lines(host, "Get-NetAdapter | ForEach-Object Name", "adapters")
+    missing = [s for s in p["network_services"] if s not in available]
+    return missing, available
+
+
+def _adapter_hint(missing, available):
+    return UNKNOWN, "网卡 %s 不存在（有: %s）；把『网络连接』里显示的名字写进 mirror.params.json 的 network_services" % (
+        missing, ", ".join(available) or "无")
+
+
 def check_system_dns(host, p, a):
+    missing, available = _missing_adapters(host, p)
+    if missing:
+        return _adapter_hint(missing, available)
     found = {}
     for svc in p["network_services"]:
         found[svc] = _lines(host, "Get-DnsClientServerAddress -InterfaceAlias %s -AddressFamily IPv4 | ForEach-Object { $_.ServerAddresses }" % _q(svc), "sysdns")
     accept = set(p.get("system_dns_accept") or [])
     if not accept:
-        return INFO, "%s（Windows 的受管 DNS 值待 W2 实机确定，本项仅记录）" % found
+        return INFO, "%s（Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器地址；真实路径由 TUN 劫持 53 保证，见 dns.local53；本项仅记录）" % found
     bad = {s: v for s, v in found.items() if not v or not set(v) <= accept}
     if bad:
         return FAIL, "不在接受列表 %s: %s" % (sorted(accept), bad)
@@ -81,6 +97,9 @@ def check_system_dns(host, p, a):
 
 
 def check_ipv6_off(host, p, a):
+    missing, available = _missing_adapters(host, p)
+    if missing:
+        return _adapter_hint(missing, available)
     problems, seen = [], []
     for svc in p["network_services"]:
         enabled = _lines(host, "(Get-NetAdapterBinding -Name %s -ComponentID ms_tcpip6).Enabled" % _q(svc), "ipv6-binding")
