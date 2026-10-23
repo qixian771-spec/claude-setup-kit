@@ -108,6 +108,14 @@ def main():
         text = path.read_text(encoding="utf-8")
         require(not re.search(r"\bopen\([^)]*\)", text) or "encoding=" in text, "%s: open() 需要 encoding=" % path.name)
         counts["python"] += 1
+    # bash 3.2 (/bin/sh on macOS) in a UTF-8 locale reads "$name" followed by a multibyte character as part
+    # of the name ("BK）: unbound variable"); every such use must be braced.
+    bad_var = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]")
+    shell_files = list((ROOT / "installers" / "lib").glob("*.sh")) + list((ROOT / "installers").glob("*.command")) \
+        + [p for p in (ROOT / "system").rglob("*") if p.is_file() and "vendor" not in p.parts and p.suffix in ("", ".sh")]
+    for path in shell_files:
+        text = path.read_text(encoding="utf-8")
+        require(not bad_var.search(text), "%s: $变量 后面紧跟非 ASCII 字符要写成 ${变量}" % path.relative_to(ROOT))
     for path in sorted((ROOT / "installers" / "lib").glob("*.sh")):
         subprocess.run([shutil.which("sh") or "sh", "-n", str(path)], check=True)
         text = path.read_text(encoding="utf-8")
