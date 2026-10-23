@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +105,12 @@ class ManifestStepTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_platform_key_falls_back_to_macos_tables(self):
+        with unittest.mock.patch.object(sys, "platform", "linux"):
+            self.assertEqual(ns.platform_key(), "darwin")
+        with unittest.mock.patch.object(sys, "platform", "win32"):
+            self.assertEqual(ns.platform_key(), "win32")
+
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):

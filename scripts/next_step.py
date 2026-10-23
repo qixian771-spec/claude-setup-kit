@@ -20,7 +20,8 @@ PASS, FAIL, UNKNOWN, INFO, MANUAL = "PASS", "FAIL", "UNKNOWN", "INFO", "MANUAL"
 
 
 def platform_key():
-    return "win32" if sys.platform.startswith("win") else sys.platform
+    # Only macOS and Windows have component tables; anything else (Linux CI runners) uses the macOS set.
+    return "win32" if sys.platform.startswith("win") else "darwin"
 
 
 def load_manifest(path, platform="darwin"):
