@@ -16,7 +16,10 @@ import argparse
 import datetime as dt
 import json
 import os
-import pwd
+try:
+    import pwd  # Unix only
+except ImportError:  # Windows
+    pwd = None
 import re
 import subprocess
 import sys
@@ -47,7 +50,37 @@ class RenderError(Exception):
     pass
 
 
+class WinUser:
+    """pwd-like record for Windows: pw_uid holds the SID (firewall rules are per SID)."""
+
+    def __init__(self, name, home, sid):
+        self.pw_name, self.pw_dir, self.pw_uid = name, home, sid
+
+
+def platform_key():
+    return "win32" if sys.platform.startswith("win") else sys.platform
+
+
+def powershell(script):
+    import base64
+    prelude = "[Console]::OutputEncoding=[Text.Encoding]::UTF8\n$ErrorActionPreference='Stop'\n"
+    encoded = base64.b64encode((prelude + script).encode("utf-16le")).decode("ascii")
+    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+                          capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+    if proc.returncode != 0:
+        raise RenderError("PowerShell 失败: %s" % (proc.stderr.strip().splitlines()[0][:120] if proc.stderr.strip() else "rc=%s" % proc.returncode))
+    return proc.stdout.strip()
+
+
 def console_user():
+    if platform_key() == "win32":
+        name, home = os.environ.get("USERNAME"), os.environ.get("USERPROFILE")
+        if not name or not home:
+            raise RenderError("缺少 USERNAME / USERPROFILE 环境变量")
+        sid = powershell("[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value")
+        if not re.fullmatch(r"S-1-5-21-\d+-\d+-\d+-\d+", sid):
+            raise RenderError("拿到的不是普通用户 SID: %s（不要用 SYSTEM/管理员提权的会话渲染）" % sid)
+        return WinUser(name, home, sid)
     name = os.environ.get("SUDO_USER") or pwd.getpwuid(os.getuid()).pw_name
     entry = pwd.getpwnam(name)
     if entry.pw_uid == 0:
@@ -56,6 +89,12 @@ def console_user():
 
 
 def wifi_iface(service):
+    if platform_key() == "win32":
+        # On Windows the "service" is the adapter's InterfaceAlias; the interface is the same name.
+        aliases = powershell("Get-NetAdapter | ForEach-Object Name").splitlines()
+        if service not in [a.strip() for a in aliases]:
+            raise RenderError("Get-NetAdapter 里没有网卡 %r（有: %s）；用 --param network_services=<别名> 指定" % (service, ", ".join(a.strip() for a in aliases)))
+        return service
     out = subprocess.run(["networksetup", "-listallhardwareports"], capture_output=True,
                          encoding="utf-8", errors="replace", timeout=20).stdout
     match = re.search(r"Hardware Port: %s\nDevice: (\S+)" % re.escape(service), out)
@@ -67,6 +106,8 @@ def wifi_iface(service):
 def load_params(manifest_path, overrides, lookup_iface=True):
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     params = dict(manifest["params"])
+    if platform_key() == "win32":
+        params.update(manifest.get("params_win", {}))
     local = Path(manifest_path).parent / "mirror.params.json"
     if local.exists():
         extra = json.loads(local.read_text(encoding="utf-8"))
@@ -85,6 +126,7 @@ def load_params(manifest_path, overrides, lookup_iface=True):
     service = params["network_services"][0]
     values = {
         "USER": user.pw_name, "HOME": user.pw_dir, "UID": str(user.pw_uid),
+        "USER_SID": str(user.pw_uid) if platform_key() == "win32" else "n/a",
         "TUN": params["tun_device"], "TUN_INET4": params["tun_inet4"],
         "EXIT_GROUP": params["exit_group"], "EXIT_GROUP_URLENC": quote(params["exit_group"]),
         "EXIT_NODE": params["exit_node"], "WIFI_SERVICE": service,

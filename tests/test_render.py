@@ -67,6 +67,31 @@ class ParamTests(RenderFixture):
                 self.values()
 
 
+class WindowsParamTests(RenderFixture):
+    def test_windows_user_and_adapter(self):
+        with patch.object(render, "platform_key", return_value="win32"), \
+                patch.dict(os.environ, {"USERNAME": "qixia", "USERPROFILE": "C:\\Users\\qixia"}), \
+                patch.object(render, "powershell", side_effect=lambda s: "S-1-5-21-1-2-3-1001" if "WindowsIdentity" in s else "以太网\nWLAN\n"):
+            self.stack.close()  # drop the macOS patches so the Windows branches run
+            self.stack = contextlib.ExitStack()
+            self.addCleanup(self.stack.close)
+            v = render.load_params(self.manifest, ["network_services=以太网"])
+            self.assertEqual((v["USER"], v["HOME"], v["UID"], v["USER_SID"], v["WIFI_IFACE"]), ("qixia", "C:\\Users\\qixia", "S-1-5-21-1-2-3-1001", "S-1-5-21-1-2-3-1001", "以太网"))
+            self.assertEqual(v["TUN"], "Meta")  # params_win merged
+            with self.assertRaises(render.RenderError):
+                render.load_params(self.manifest, ["network_services=Nope"])
+
+    def test_windows_rejects_system_sid(self):
+        self.stack.close()  # the fixture patches console_user itself; test the real one
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        with patch.object(render, "platform_key", return_value="win32"), \
+                patch.dict(os.environ, {"USERNAME": "SYSTEM", "USERPROFILE": "C:\\Windows"}), \
+                patch.object(render, "powershell", return_value="S-1-5-18"):
+            with self.assertRaises(render.RenderError):
+                render.console_user()
+
+
 class ComponentTests(RenderFixture):
     def test_every_system_component_renders_without_placeholders(self):
         for name in render.COMPONENTS:

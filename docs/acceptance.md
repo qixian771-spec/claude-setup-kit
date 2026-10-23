@@ -17,3 +17,9 @@
 ## E6 弱模型推演（2026-10-22）
 
 Haiku 子代理只拿 README 的"发给 AI 的一段话"，在去掉卸载脚本的临时克隆里做只读部分：读 START.md → `mirror_check`（33 ✅ / 1 ❌）→ 问路线并（按预设）得到 B → `next_step`（S7，因克隆里没有 mirror.params.json，ipv6 守护 label 用了默认值）→ 准备让用户双击、不越界。它指出两处缺口：START.md 第 0 步没要求写 mirror.params.json；S7 话术没提输密码。两处已修（`fb85ee4`，CI run 39875414828 success）。
+
+## W1 Windows 对账（2026-10-22）
+
+- 局域网 Win10 19045 实机只读：`py -3 scripts\mirror_check.py --no-network --param network_services=以太网` → exit 1，✅1 ❌13 ❓8（Clash 未运行：命名管道不可达；`--no-network`）ℹ️2 👉1，无 Traceback；`clash.dns`、`wf.enabled`（只开 Private）、`sys.timezone`（China Standard Time）抓到的都是真实状态。
+- CI：`216fef0` 与 `beff452`（IPv6 查询修正）三个 job 全部通过（run 见 Actions 页）。
+- 发现并修复：作为 `__main__` 运行时 `winchecks` 的 `import mirror_check` 是另一个模块对象，`HostError` 不相等导致 ❌ 被报成 ❓；已绑定并加回归测试。
