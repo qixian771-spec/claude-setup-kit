@@ -37,7 +37,7 @@
 
 ## S1 Clash Verge
 
-进入：G1 完成；用户有节点参数。组件：`clash.core clash.mode clash.tun clash.exit clash.rules clash.dns net.tun_iface dns.local53 dns.system`。
+进入：G1 完成；用户有节点参数（至少两个：Claude 主出口 + 一个给 Google 用的）。组件：`clash.core clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53 dns.system`。
 
 动作：
 1. 👤 安装 Clash Verge（参考机 2.5.2，核心 mihomo v1.19.29），打开一次，**设置 → 服务模式 安装**（TUN 需要）。
@@ -45,9 +45,10 @@
    `python3 scripts/render.py --component clash --nodes <节点参数.json>` → 输出目录里 `templates/clash-profile.template.yaml` 与 `clash-profile.script.js`。
 3. 👤 Clash Verge → 配置 → 新建 → 类型 Local → 导入渲染出的 yaml；右键该配置 → 编辑脚本 → 粘贴 `clash-profile.script.js` 内容 → 保存；激活该配置。
 4. 👤 设置：开 TUN 模式、系统代理开、DNS 覆写关（脚本已写 DNS）；代理页把 `出口选择` 选到出口节点。
-5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.dns,net.tun_iface,dns.local53,dns.system`
+4b. 👤 代理页把 `Google出口` 选成**主出口以外**的节点（参考机用韩国节点）。为什么：Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Google 走另一个节点，Claude 的出口不动，`storage.googleapis.com`/`fonts.*` 这些 Claude 要用的仍走主出口（规则顺序已在模板里排好）。
+5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
 
-读：九项全 ✅。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
+读：十项全 ✅。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
 
 停止：`clash.core` ❓ = 核心没起/控制 socket 路径不同（`--param clash_api=`）；`clash.exit` ❌ = 分组里有 DIRECT 或没选到节点，先在 GUI 改；`clash.rules`/`clash.dns` ❌ = 导入的不是渲染文件或脚本没绑定。不进 S4 之前这些必须 ✅——**S4 的墙会把没走 TUN 的公网全部拦掉**。
 
@@ -151,6 +152,7 @@
 | 用户只问"我这台差什么" | G1 对账表，报告，结束 | 顺手装任何东西 |
 | 用户没有节点 | 停在 G0，指向 vps 仓库 | 用公共免费节点凑数 |
 | `clash.exit` 显示分组里有 DIRECT | 让用户在 GUI 删掉 DIRECT 再对账 | 改 manifest 把 DIRECT 放行 |
+| 用户说 Gemini“不支持该地区” | 看 `clash.google_exit`：Google 分组是否选了主出口；换成另一个节点 | 为了 Gemini 去切 `出口选择` |
 | `dns.system` 是 114.114.114.114 | 看 `dns.local53`，✅ 就接受 | 去把系统 DNS 改成 1.1.1.1 |
 | 装 020 时 `EXIT=75` | 回 S1 把 TUN 开起来 | 改脚本跳过检查 |
 | 装 010 时 `EXIT=73` | 把日志贴出来，pf.conf 已自动恢复 | 手改 /etc/pf.conf |
@@ -180,7 +182,7 @@
 | id | 步 | 安装器 / 动作 |
 |---|---|---|
 | `os` | G1 | — |
-| `clash.core` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI |
+| `clash.core` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI |
 | `pf.enabled` `pf.010` `loader.010` `daemon.010` `pf.conf` | S2 | `安装Claude直连墙.command` |
 | `pf.011` `loader.011` `daemon.011` | S3 | `安装Anthropic整段墙.command` |
 | `pf.020` `loader.020` `daemon.020` | S4 | `安装防泄露墙.command` |

@@ -29,12 +29,12 @@ py -3 scripts\mirror_check.py --no-network
 
 ## S1 Clash Verge（Windows）
 
-组件：`clash.core clash.mode clash.tun clash.exit clash.rules clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录）。
+组件：`clash.core clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录）。
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
 2. AI：`py -3 scripts\render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
-3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；右键 → 编辑脚本 → 粘贴 `clash-profile.script.js` → 保存 → 激活；设置里开 **TUN 模式**；代理页把出口分组选到出口节点。
-4. 对账：`py -3 scripts\mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.dns,net.tun_iface,dns.local53`。
+3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；右键 → 编辑脚本 → 粘贴 `clash-profile.script.js` → 保存 → 激活；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
+4. 对账：`py -3 scripts\mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
 
 控制通道：Windows 版 Clash Verge 在命名管道 `\\.\pipe\verge-mihomo`（`params_win.clash_api`）；若用户另设了 `external-controller`，用 `--param clash_api=http://127.0.0.1:<端口>` 并设环境变量 `MIHOMO_SECRET`。TUN 适配器默认名 `Meta`（`params_win.tun_device`）。
 
@@ -107,7 +107,7 @@ py -3 scripts\mirror_check.py --no-network
 | id | 步 | 安装器 / 动作 |
 |---|---|---|
 | `os` | G1 | — |
-| `clash.core` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
+| `clash.core` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
 | `wf.enabled` `wf.011` `wf.020` | S2 | `安装防火墙规则.cmd` |
 | `task.watch` `watch.fresh` | S3 | `安装自检守护.cmd` |
 | `net.ipv6_off` `task.ipv6` | S4 | `安装IPv6守护.cmd` |

@@ -92,7 +92,15 @@
     ],
     "firewall_prefix": "claude-setup-kit:",
     "task_prefix": "claude-setup-kit",
-    "watch_dir": "C:\\ProgramData\\claude-setup-kit\\watch"
+    "watch_dir": "C:\\ProgramData\\claude-setup-kit\\watch",
+    "google_group": "Google出口",
+    "google_suffixes": [
+      "google.com",
+      "googleapis.com",
+      "gstatic.com",
+      "googleusercontent.com"
+    ],
+    "google_group_note": "Google's geolocation often classifies hosting IPs used by Chinese customers as China/HK (Gemini: region not supported). Google traffic therefore uses a separate select group whose current member must not be the Claude exit node."
   },
   "components": [
     {
@@ -165,6 +173,18 @@
         "darwin",
         "win32"
       ]
+    },
+    {
+      "id": "clash.google_exit",
+      "layer": "代理",
+      "title": "Google 专用分组：存在、无 DIRECT、不等于 Claude 出口，四条 Google 规则排在 GEOSITE 之前",
+      "check": "clash_google_exit",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next": "按 templates/clash-profile.template.yaml 加 Google出口 分组（成员 = 主出口以外的节点）并把 4 条 DOMAIN-SUFFIX 规则放在 storage/fonts 精确规则之后、GEOSITE 之前；分组里选一个不是 Claude 出口的节点。Google 把很多机房 IP 判成中国，Gemini 会报“不支持该地区”。",
+      "next_win": "同 macOS：在 Clash Verge 里导入渲染后的模板，代理页把 Google出口 选成主出口以外的节点。"
     },
     {
       "id": "clash.dns",
@@ -738,6 +758,7 @@
         "clash.tun",
         "clash.exit",
         "clash.rules",
+        "clash.google_exit",
         "clash.dns",
         "net.tun_iface",
         "dns.local53",
@@ -954,6 +975,7 @@
         "clash.tun",
         "clash.exit",
         "clash.rules",
+        "clash.google_exit",
         "clash.dns",
         "net.tun_iface",
         "dns.local53"

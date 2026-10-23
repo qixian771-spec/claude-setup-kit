@@ -201,6 +201,11 @@ class ComponentTests(RenderFixture):
         nodes.write_text(json.dumps({"NODE1_NAME": "a", "server": "x"}), encoding="utf-8")
         with self.assertRaises(render.RenderError):
             render.load_nodes(nodes)
+        with self.assertRaises(render.RenderError):
+            render.load_nodes(self.root / "missing.json")
+        nodes.write_text("{broken", encoding="utf-8")
+        with self.assertRaises(render.RenderError):
+            render.load_nodes(nodes)
         keys = {k for k in render.PLACEHOLDER.findall((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8")) if k.startswith("NODE")}
         nodes.write_text(json.dumps({k: "v-" + k.lower() for k in keys}), encoding="utf-8")
         values = dict(self.values(), **render.load_nodes(nodes))
@@ -209,6 +214,10 @@ class ComponentTests(RenderFixture):
         self.assertNotIn("{{", text)
         self.assertIn("v-node1_server", text)
         self.assertIn("出口选择", text)
+        self.assertIn("Google出口", text)
+        self.assertIn("DOMAIN-SUFFIX,google.com,Google出口", text)
+        self.assertLess(text.index("DOMAIN,storage.googleapis.com,出口选择"), text.index("DOMAIN-SUFFIX,googleapis.com,Google出口"))
+        self.assertLess(text.index("DOMAIN-SUFFIX,google.com,Google出口"), text.index("GEOSITE,geolocation-!cn"))
         params = (self.root / "c2/PARAMS.txt").read_text(encoding="utf-8")
         self.assertNotIn("v-node", params)  # node secrets never land in the params summary
 

@@ -29,3 +29,9 @@ Haiku 子代理只拿 README 的"发给 AI 的一段话"，在去掉卸载脚本
 - 局域网 Win10：`system-win` 全部 `.ps1` 用 PowerShell 解析器 0 错误；`py -3 scripts\render.py --component win-firewall|win-tasks|win-tools` 跑通（USER=qixia、SID、网卡 以太网、TUN=Meta、时区参数）；`Read-Params` + `Assert-Physical` 通过；渲染后的 `claude-wall.ps1 status` 只读运行：缺 8 条规则、Domain/Public 未启用、TUN 不在、DNS 无应答、守护未装 → exit 6。
 - 没有安装任何东西；Clash Verge 在该机上从未运行。
 - CI：windows-2022 job 经六轮 runner 差异修正（Git bash 而非 WSL、工具脚本 UTF-8 输出、测试夹具平台固定、路径与参数分隔符），[run 39880530946](https://github.com/qixian771-spec/claude-setup-kit/actions/runs/39880530946) 四个 job 全部通过，含 Windows 原生只读 smoke（mirror_check/next_step 退出码、三个 win-* 组件渲染、PowerShell 解析、claude-wall.ps1 只读运行）。
+
+## E7 Google 专用分组（2026-10-23）
+
+- 起因：参考机 Gemini 提示"不支持该地区"——Google 的地理库把丽萨出口 IP 判成中国/香港（首页弹 google.com.hk 转向）；VPS 无 IPv6、无链式出站，Google 看到的就是 VPS 自己的 IPv4。
+- 参考机已装：`Google出口` 分组（韩国43 默认、76美国 备选），四条 Google 后缀规则放在 storage/fonts 精确规则之后、GEOSITE 之前（v1 放在 GEOSITE 之后被 `geolocation-!cn` 抢走，实抓连接证实；v2 实抓 `www.google.com → Google出口/韩国43`，首页不再弹 .hk，Gemini 可用）。Claude 出口与 34 项对账不变。
+- 模板与对账已通用化：成员用 `{{NODE2_NAME}}`/`{{NODE3_NAME}}` 占位，`clash.google_exit` 在参考机 ✅。

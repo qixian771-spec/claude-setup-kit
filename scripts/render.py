@@ -138,6 +138,7 @@ def load_params(manifest_path, overrides, lookup_iface=True):
         "TUN": params["tun_device"], "TUN_INET4": params["tun_inet4"],
         "EXIT_GROUP": params["exit_group"], "EXIT_GROUP_URLENC": quote(params["exit_group"]),
         "EXIT_NODE": params["exit_node"], "WIFI_SERVICE": service,
+        "GOOGLE_GROUP": params["google_group"],
         "WIFI_IFACE": wifi_iface(service) if lookup_iface else "{{WIFI_IFACE}}",
         "IPV6_LABEL": params["ipv6_guard_label"],
         "TIMEZONE_WIN": params.get("timezone_win", "n/a"),
@@ -151,7 +152,12 @@ def load_params(manifest_path, overrides, lookup_iface=True):
 
 
 def load_nodes(path):
-    data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    if not Path(path).is_file():
+        raise RenderError("--nodes 文件不存在: %s" % path)
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except ValueError as exc:
+        raise RenderError("--nodes 不是合法 JSON: %s" % exc)
     if not isinstance(data, dict) or not all(re.fullmatch(r"NODE\d+_[A-Z_]+", k) for k in data):
         raise RenderError("--nodes 文件必须是 {\"NODE1_NAME\": ..., \"NODE1_SERVER\": ...} 这样的 JSON 对象")
     return {k: str(v) for k, v in data.items()}

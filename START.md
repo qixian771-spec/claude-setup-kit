@@ -34,7 +34,7 @@ Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mi
 | **C 清理重置** | 换账号、封号后重来、要关遥测/补分流 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则 | 清理验收 + 标识对比表 | `identifiers.py --compare` 退出 0 的输出 |
 | **D 全套从零** | 新机器或要"和参考机一模一样" | 顺序：C（可选，只在有旧数据时）→ A（没有节点时）→ B → ippure | 同 B | 同 B |
 
-路线之间的衔接：A 的产出直接喂给 B 的 S1（`render.py --component clash --nodes <JSON>`）；C 做完后 B 的 S9（Chrome）与 S1 都要重新对账，因为清理会动浏览器与 Clash 之外的 Claude 数据但不动系统防护。
+路线之间的衔接：A 的产出直接喂给 B 的 S1（`render.py --component clash --nodes <JSON>`）——**至少要两个节点**：`NODE1` 给 Claude 固定出口，`NODE2`（可再加 `NODE3`）给 Google 系域名用的 `Google出口` 分组，因为 Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Claude 出口不受影响。C 做完后 B 的 S9（Chrome）与 S1 都要重新对账，因为清理会动浏览器与 Clash 之外的 Claude 数据但不动系统防护。
 
 ## 2. 在 B 路线里你每一轮只做这三件事
 

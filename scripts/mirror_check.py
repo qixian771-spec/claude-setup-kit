@@ -314,6 +314,42 @@ def check_clash_rules(host, p, a):
     return PASS, "%d 条规则，必需项齐全" % len(rules)
 
 
+def check_clash_google_exit(host, p, a):
+    group = p["google_group"]
+    try:
+        data = host.api(p["clash_api"], "/proxies/" + quote(group))
+    except HostError as exc:
+        if "返回 404" in str(exc):
+            return FAIL, "分组 %s 不存在" % group
+        raise
+    members = data.get("all") or []
+    problems = []
+    if data.get("type") != "Selector":
+        problems.append("type=%s（要求 Selector）" % data.get("type"))
+    if any(m.upper() in ("DIRECT", "REJECT") for m in members):
+        problems.append("成员含 DIRECT/REJECT")
+    if data.get("now") == p["exit_node"]:
+        problems.append("当前选中的是 Claude 出口 %s（Google 会把它判成中国；换成别的节点）" % p["exit_node"])
+    rules = host.api(p["clash_api"], "/rules").get("rules") or []
+    def index(pred):
+        return next((i for i, r in enumerate(rules) if pred(r)), None)
+    for suffix in p["google_suffixes"]:
+        i = index(lambda r: r.get("type") == "DomainSuffix" and r.get("payload") == suffix and r.get("proxy") == group)
+        if i is None:
+            problems.append("缺 DOMAIN-SUFFIX,%s,%s" % (suffix, group))
+    geo = index(lambda r: r.get("type") == "GeoSite" and str(r.get("payload")).lower() == "geolocation-!cn")
+    first_google = index(lambda r: r.get("proxy") == group)
+    if geo is not None and first_google is not None and first_google > geo:
+        problems.append("Google 规则排在 GEOSITE,geolocation-!cn 之后，会被它抢走")
+    for exact in ("storage.googleapis.com", "fonts.googleapis.com", "fonts.gstatic.com"):
+        j = index(lambda r: r.get("type") == "Domain" and r.get("payload") == exact)
+        if j is not None and first_google is not None and j > first_google:
+            problems.append("%s 的精确规则排在 Google 后缀规则之后（Claude 的资源会跟着走 Google 出口）" % exact)
+    if problems:
+        return FAIL, "; ".join(problems)
+    return PASS, "%s: Selector now=%s 成员=%s；%d 条 Google 规则在 GEOSITE 之前" % (group, data.get("now"), members, len(p["google_suffixes"]))
+
+
 def _dns_block(text):
     lines = text.splitlines()
     start = next((i for i, l in enumerate(lines) if l.rstrip() == "dns:"), None)

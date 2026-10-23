@@ -26,6 +26,7 @@ shutil.copy(ROOT / "manifest.json", MANIFEST)
 HOME = "/Users/tester"
 NOW = dt.datetime(2026, 10, 22, 22, 37, 0, tzinfo=dt.timezone.utc)
 GROUP_PATH = "/proxies/%E5%87%BA%E5%8F%A3%E9%80%89%E6%8B%A9"
+GOOGLE_PATH = "/proxies/Google%E5%87%BA%E5%8F%A3"
 
 RULES_010 = '''pass out quick on utun1024 from any to <claude_wall_targets> no state label "claude-wall-tun"
 block drop out quick inet from any to <claude_wall_targets> label "claude-wall-ipv4"
@@ -160,14 +161,21 @@ def baseline_apis():
                      "tun": {"enable": True, "device": "utun1024", "inet4-address": ["198.18.0.1/30"],
                              "dns-hijack": ["any:53", "tcp://any:53"]}},
         GROUP_PATH: {"type": "Selector", "now": "丽萨美国", "all": ["丽萨美国", "204美国", "韩国43", "76美国"]},
+        GOOGLE_PATH: {"type": "Selector", "now": "韩国43", "all": ["韩国43", "76美国"]},
         "/rules": {"rules": [
             {"type": "DstPort", "payload": "3478", "proxy": "REJECT"},
             {"type": "DstPort", "payload": "5349", "proxy": "REJECT"},
             {"type": "DstPort", "payload": "19302", "proxy": "REJECT"},
         ] + [{"type": "DomainSuffix", "payload": s, "proxy": "出口选择"} for s in (
             "anthropic.com", "claude.ai", "claude.com", "claude.app", "claudeusercontent.com", "claudemcpcontent.com")] + [
+            {"type": "Domain", "payload": "storage.googleapis.com", "proxy": "出口选择"},
+            {"type": "Domain", "payload": "fonts.googleapis.com", "proxy": "出口选择"},
+            {"type": "Domain", "payload": "fonts.gstatic.com", "proxy": "出口选择"},
+        ] + [{"type": "DomainSuffix", "payload": s, "proxy": "Google出口"} for s in (
+            "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com")] + [
             {"type": "GeoSite", "payload": "private", "proxy": "DIRECT"},
             {"type": "GeoSite", "payload": "CN", "proxy": "DIRECT"},
+            {"type": "GeoSite", "payload": "geolocation-!cn", "proxy": "出口选择"},
             {"type": "GeoIP", "payload": "cn", "proxy": "DIRECT"},
             {"type": "Match", "payload": "", "proxy": "出口选择"},
         ]},
@@ -232,6 +240,8 @@ class FakeHost:
 
     def api(self, base, path, timeout=10):
         if path not in self.apis:
+            if path.startswith("/proxies/") and "/version" in self.apis:
+                raise mc.HostError("API %s 返回 404" % path)  # core up, group missing
             raise mc.HostError("API 不可达 %s" % base)
         return self.apis[path]
 
@@ -463,6 +473,44 @@ class ClashTests(unittest.TestCase):
         code, items, _ = run_json(host, "--only", "clash.dns")
         self.assertEqual(items["clash.dns"]["status"], mc.UNKNOWN)
         self.assertEqual(code, 2)
+
+
+class GoogleExitTests(unittest.TestCase):
+    def test_reference_google_group_passes(self):
+        _, items, _ = run_json(FakeHost(), "--only", "clash.google_exit")
+        self.assertEqual(items["clash.google_exit"]["status"], mc.PASS)
+        self.assertIn("韩国43", items["clash.google_exit"]["evidence"])
+
+    def test_group_missing_or_pointing_at_claude_exit(self):
+        host = FakeHost()
+        del host.apis[GOOGLE_PATH]
+        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertIn("不存在", items["clash.google_exit"]["evidence"])
+        host = FakeHost()
+        host.apis[GOOGLE_PATH]["now"] = "丽萨美国"
+        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertIn("当前选中的是 Claude 出口", items["clash.google_exit"]["evidence"])
+
+    def test_rule_order_matters(self):
+        host = FakeHost()
+        rules = host.apis["/rules"]["rules"]
+        google = [r for r in rules if r["proxy"] == "Google出口"]
+        rules[:] = [r for r in rules if r["proxy"] != "Google出口"]
+        rules[-1:-1] = google  # after GEOSITE,geolocation-!cn, before MATCH (the v1 mistake)
+        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertIn("排在 GEOSITE,geolocation-!cn 之后", items["clash.google_exit"]["evidence"])
+        host = FakeHost()
+        rules = host.apis["/rules"]["rules"]
+        storage = next(r for r in rules if r["payload"] == "storage.googleapis.com")
+        rules.remove(storage); rules.insert(rules.index(next(r for r in rules if r["payload"] == "geolocation-!cn")), storage)
+        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertIn("storage.googleapis.com 的精确规则排在 Google 后缀规则之后", items["clash.google_exit"]["evidence"])
+
+    def test_missing_suffix_rule(self):
+        host = FakeHost()
+        host.apis["/rules"]["rules"] = [r for r in host.apis["/rules"]["rules"] if r["payload"] != "gstatic.com" or r["proxy"] != "Google出口"]
+        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertIn("缺 DOMAIN-SUFFIX,gstatic.com,Google出口", items["clash.google_exit"]["evidence"])
 
 
 class NetworkLayerTests(unittest.TestCase):

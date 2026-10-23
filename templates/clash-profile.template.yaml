@@ -1,7 +1,12 @@
-# claude-setup-kit — Clash Verge 本地配置模板（来自参考机 2026-10-22，节点全部换成占位符）
+# claude-setup-kit — Clash Verge 本地配置模板（照参考机 2026-10-23 现状，节点全部换成占位符）
 # 渲染：python3 scripts/render.py --component clash --nodes <你的节点参数.json>；或手工把双花括号占位符换成真实值。
-# 导入 Clash Verge 后，把 templates/clash-profile.script.js 绑定为该配置的“脚本”（它写 DNS 并前置 STUN REJECT）。
-# 不要给 {{EXIT_GROUP}} 分组加 DIRECT；国内走 GEOSITE/GEOIP CN DIRECT 由 rules 决定。
+# 导入 Clash Verge 后，把 templates/clash-profile.script.js 绑定为该配置的"脚本"（它写 DNS 并前置 STUN REJECT）。
+# 分组：EXIT_GROUP 是 Claude 的固定出口（成员不许有 DIRECT）；GOOGLE_GROUP 只给 Google 系域名用，
+#   成员是主出口以外的节点——Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"，
+#   所以 Google 走另一个节点，Claude 的出口不动。两个分组的规则顺序：Claude 的 storage/fonts 精确规则在前，
+#   Google 后缀规则其次，GEOSITE/GEOIP 兜底在后。
+# rules 段含参考机的 112 条规则：其中监测/上报、CDN、第三方、进程兜底等 68 条来自 claude-client-full-reset 的
+#   telemetry_routing.py（6 大模块），要更新以那边为准。
 mixed-port: 7890
 allow-lan: false
 mode: rule
@@ -141,12 +146,85 @@ proxy-groups:
   - '{{NODE1_NAME}}'
   - '{{NODE2_NAME}}'
   - '{{NODE3_NAME}}'
+- name: '{{GOOGLE_GROUP}}'
+  type: select
+  proxies:
+  - '{{NODE2_NAME}}'
+  - '{{NODE3_NAME}}'
 - name: GLOBAL
   type: select
   hidden: true
   proxies:
   - '{{EXIT_GROUP}}'
 rules:
+- DOMAIN-SUFFIX,clau.de,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,claudemcpclient.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,modelcontextprotocol.io,{{EXIT_GROUP}}
+- DOMAIN,api.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,platform.claude.com,{{EXIT_GROUP}}
+- DOMAIN,code.claude.com,{{EXIT_GROUP}}
+- DOMAIN,console.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,workbench.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,docs.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,docs.claude.com,{{EXIT_GROUP}}
+- DOMAIN,support.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,support.claude.com,{{EXIT_GROUP}}
+- DOMAIN,status.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,status.claude.com,{{EXIT_GROUP}}
+- DOMAIN,mcp.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,mcp-proxy.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,bridge.claudeusercontent.com,{{EXIT_GROUP}}
+- DOMAIN,anthropic.auth0.com,{{EXIT_GROUP}}
+- DOMAIN,anthropic-com.ghost.io,{{EXIT_GROUP}}
+- DOMAIN,cdn.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,assets-proxy.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,anthropic.com.cdn.cloudflare.net,{{EXIT_GROUP}}
+- DOMAIN,servd-anthropic-website.b-cdn.net,{{EXIT_GROUP}}
+- DOMAIN,downloads.claude.ai,{{EXIT_GROUP}}
+- DOMAIN,assets.claude.ai,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,browser-intake-us5-datadoghq.com,{{EXIT_GROUP}}
+- DOMAIN,browser-intake-datadoghq.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,browser-intake-datadoghq.com,{{EXIT_GROUP}}
+- DOMAIN,o1158394.ingest.us.sentry.io,{{EXIT_GROUP}}
+- DOMAIN,a-api.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,s-cdn.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,a-cdn.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,statsig.anthropic.com,{{EXIT_GROUP}}
+- DOMAIN,cdn.growthbook.io,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,growthbook.io,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,datadoghq.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,datadoghq.eu,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,ddog-gov.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,segment.io,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,segment.com,{{EXIT_GROUP}}
+- DOMAIN-KEYWORD,datadog,{{EXIT_GROUP}}
+- DOMAIN-KEYWORD,sentry,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,sift.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,siftscience.com,{{EXIT_GROUP}}
+- DOMAIN-KEYWORD,sift,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,intercom.io,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,intercomcdn.com,{{EXIT_GROUP}}
+- DOMAIN,cdn.usefathom.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,stripe.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,stripecdn.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,hcaptcha.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,arkoselabs.com,{{EXIT_GROUP}}
+- IP-CIDR,160.79.104.0/21,{{EXIT_GROUP}},no-resolve
+- IP-CIDR6,2607:6bc0::/32,{{EXIT_GROUP}},no-resolve
+- IP-ASN,399358,{{EXIT_GROUP}},no-resolve
+- GEOSITE,anthropic,{{EXIT_GROUP}}
+- GEOSITE,category-ntp,{{EXIT_GROUP}}
+- PROCESS-NAME,Claude,{{EXIT_GROUP}}
+- PROCESS-NAME,Claude Helper,{{EXIT_GROUP}}
+- PROCESS-NAME,Claude Helper (Renderer),{{EXIT_GROUP}}
+- PROCESS-NAME,Claude Helper (GPU),{{EXIT_GROUP}}
+- PROCESS-NAME,Claude Helper (Plugin),{{EXIT_GROUP}}
+- PROCESS-NAME,chrome-native-host,{{EXIT_GROUP}}
+- PROCESS-NAME,ShipIt,{{EXIT_GROUP}}
+- PROCESS-NAME,claude,{{EXIT_GROUP}}
+- PROCESS-NAME,Claude.exe,{{EXIT_GROUP}}
+- PROCESS-NAME,claude.exe,{{EXIT_GROUP}}
+- PROCESS-NAME,chrome-native-host.exe,{{EXIT_GROUP}}
 - DST-PORT,3478,REJECT
 - DST-PORT,5349,REJECT
 - DST-PORT,19302,REJECT
@@ -181,6 +259,10 @@ rules:
 - DOMAIN,cdn.tailwindcss.com,{{EXIT_GROUP}}
 - DOMAIN,code.jquery.com,{{EXIT_GROUP}}
 - DOMAIN,unpkg.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,google.com,{{GOOGLE_GROUP}}
+- DOMAIN-SUFFIX,googleapis.com,{{GOOGLE_GROUP}}
+- DOMAIN-SUFFIX,gstatic.com,{{GOOGLE_GROUP}}
+- DOMAIN-SUFFIX,googleusercontent.com,{{GOOGLE_GROUP}}
 - GEOSITE,private,DIRECT
 - GEOIP,private,DIRECT,no-resolve
 - GEOSITE,CN,DIRECT

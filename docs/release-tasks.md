@@ -10,6 +10,7 @@
 | E4 | SKILL、README、执行手册（S1–S12，每步对应组件 id，22 条情景推演）、对话模板、ippure 验收说明、`tools/check.py`、CI | 本提交 |
 | E5 | 公开仓库发布、CI 绿、vps 仓库 macos-leak-guard.md 改为对照与链接 | 通过：run 39874114255；vps run 39873953681 |
 | E6 | 总入口：仓库改名 claude-setup-kit；README“发给 AI 的一段话”；START.md 四条路线；manifest `steps`；`next_step.py`；另两仓库 README 指回 | 通过：run 39874984538 / 39875414828；Haiku 只读推演按那段话走通并找出两处缺口（已修） |
+| E7 | Google 专用分组通用化：Clash 模板照参考机现状重生成（112 条规则、`{{GOOGLE_GROUP}}` 成员为主出口以外的节点占位符、Google 后缀规则在 storage/fonts 之后、GEOSITE 之前）；新组件 `clash.google_exit`（分组存在、无 DIRECT、当前节点≠Claude 出口、规则顺序）；手册/START/对话模板说明 Google 把机房 IP 判成中国的问题 | 通过：参考机对账 ✅；渲染+脚本模拟后 `verge-mihomo -t` 通过；130 例 |
 
 ## 已知边界
 
