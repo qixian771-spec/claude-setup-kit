@@ -145,6 +145,14 @@ class WindowsFailureTests(unittest.TestCase):
         _, items, _ = run_json(host, "--only", "net.ipv6_off")
         self.assertIn("仍启用", items["net.ipv6_off"]["evidence"])
 
+    def test_chrome_installed_per_user_is_still_checked(self):
+        # Per-user Chrome lives under %LOCALAPPDATA%; it must not be reported as "not installed" and skipped.
+        host = WinHost()
+        del host.stats["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"]
+        host.stats[mc.expand(host, "%LOCALAPPDATA%/Google/Chrome/Application/chrome.exe")] = Stat(0, 0o100644)
+        _, items, _ = run_json(host, "--only", "chrome.policy")
+        self.assertEqual(items["chrome.policy"]["status"], mc.PASS)
+
     def test_policies_missing_or_wrong(self):
         host = WinHost()
         del host.ps_outputs["reg-Chrome"]

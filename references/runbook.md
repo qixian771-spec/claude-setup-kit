@@ -48,7 +48,7 @@
 4b. 👤 代理页把 `Google出口` 选成**主出口以外**的节点（参考机用韩国节点）。为什么：Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Google 走另一个节点，Claude 的出口不动，`storage.googleapis.com`/`fonts.*` 这些 Claude 要用的仍走主出口（规则顺序已在模板里排好）。
 5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
 
-读：十一项全 ✅。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；退出 Clash Verge 后删掉这几段再开。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
+读：十一项全 ✅。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；S1 配置阶段允许退出 Clash Verge（托盘里退出）删掉这几段再开——这是"不退出 Clash"硬规则唯一的例外，只在还没开始用 Claude 时做。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
 
 停止：`clash.core` ❓ = 核心没起/控制 socket 路径不同（`--param clash_api=`）；`clash.exit` ❌ = 分组里有 DIRECT 或没选到节点，先在 GUI 改；`clash.rules`/`clash.dns` ❌ = 导入的不是渲染文件或脚本没绑定。不进 S4 之前这些必须 ✅——**S4 的墙会把没走 TUN 的公网全部拦掉**。
 
@@ -140,7 +140,7 @@
 | `mirror_check.py` | 全部 ✅（ℹ️/👉 不计） | 有 ❌ | 有 ❓（要 sudo / 工具缺 / 网络不可达 / `--no-network`） | — |
 | `render.py` | 渲染完成，首行是输出目录 | — | 参数或占位符错误（stderr `[ERROR]`） | — |
 | `next_step.py` | 全部步骤通过，去做 ippure | — | mirror_check 跑不了或 manifest 不一致 | 3 = 打印了待做的步 |
-| `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置缺失/pf.conf 语法 · 74 装后验证失败 · 75 TUN 不在 |
+| `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置不符（pf.conf 语法没过已恢复备份 / 前一道墙不在 / 卸载时守护 label 不符，日志写明是哪一样） · 74 装后验证失败 · 75 TUN 不在 |
 | `.command` 日志 `EXIT=` | 同上 | | | 2 = 渲染失败，什么都没装 |
 
 `[OK]` 出现过不代表后面没失败，看最后的 `EXIT=`。`.command` 日志里过滤掉了含 `ALTQ` 的行：那是 macOS `pfctl` 每次都打印的 "No ALTQ support in kernel" 噪音，不是错误；其他输出一行不漏。
@@ -160,6 +160,7 @@
 | 装 020 时 `EXIT=75` | 回 S1 把 TUN 开起来 | 改脚本跳过检查 |
 | 装 010 时 `EXIT=73` | 把日志贴出来，pf.conf 已自动恢复 | 手改 /etc/pf.conf |
 | `EXIT=72` 已存在 | 先对账该组件，✅ 就不用装；❌ 停下报告，用户决定是否卸载重装 | 直接覆盖；AI 自己卸载 |
+| 上一次 `EXIT=73`（装到一半停了）这次变 `EXIT=72` | 73 时前面几个文件已经装上了：报告用户，由用户双击 `卸载.command` 清掉这一道再重装 | AI 自己删文件 |
 | `watch.fresh` 是 WARN "出口选择不是 X" | 对照用户要的节点名改 `mirror.params.json`，或让用户在 GUI 选回 | 为了让它 OK 去切节点 |
 | `updater.fresh` ❌ 首轮 STOPPED | 等 15 分钟再对账；连续 6 小时 STOPPED 才算问题 | 删除旧目标表 |
 | `chrome.policy` ❌ 但 ippure WebRTC 显示未泄露 | 仍要装描述文件（现在只靠 PF 兜底） | 宣称 WebRTC 已处理 |

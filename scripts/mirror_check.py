@@ -815,7 +815,7 @@ def run_component(host, params, comp, network=True):
         try:
             status, evidence = fn(host, params, comp.get("args") or {})
         except NeedSudo as exc:
-            status, evidence = UNKNOWN, "%s（用 sudo 重跑）" % exc
+            status, evidence = UNKNOWN, "%s（用 sudo 重跑：sudo python3 scripts/mirror_check.py --only %s）" % (exc, comp["id"])
         except HostError as exc:
             status, evidence = UNKNOWN, str(exc)
     item = {"id": comp["id"], "layer": comp["layer"], "title": comp["title"],

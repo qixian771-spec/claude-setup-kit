@@ -28,6 +28,11 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 PLACEHOLDER = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
+# Optional parts of a template. A whole block between a "# {{IF KEY}}" line and a "# {{ENDIF}}" line, or a single
+# line ending in "# {{IF KEY}}", is kept only when KEY was supplied (e.g. NODE3_* for an optional third node).
+BLOCK_START = re.compile(r"^\s*#\s*\{\{IF ([A-Z0-9_]+)\}\}\s*$")
+BLOCK_END = re.compile(r"^\s*#\s*\{\{ENDIF\}\}\s*$")
+INLINE_IF = re.compile(r"\s*#\s*\{\{IF ([A-Z0-9_]+)\}\}\s*$")
 
 COMPONENTS = {
     "direct-wall": ["system/pf.anchors/local.claude-direct-wall", "system/libexec/claude-direct-wall",
@@ -163,7 +168,36 @@ def load_nodes(path):
     return {k: str(v) for k, v in data.items()}
 
 
+def apply_conditionals(text, values, source):
+    out, skipping, depth = [], False, 0
+    for line in text.splitlines(keepends=True):
+        start = BLOCK_START.match(line)
+        if start:
+            if depth:
+                raise RenderError("%s: {{IF}} 不能嵌套" % source)
+            depth, skipping = 1, start.group(1) not in values
+            continue
+        if BLOCK_END.match(line):
+            if not depth:
+                raise RenderError("%s: 多余的 {{ENDIF}}" % source)
+            depth, skipping = 0, False
+            continue
+        if skipping:
+            continue
+        inline = INLINE_IF.search(line)
+        if inline:
+            if inline.group(1) not in values:
+                continue
+            line = line[:inline.start()] + ("\n" if line.endswith("\n") else "")
+        out.append(line)
+    if depth:
+        raise RenderError("%s: {{IF}} 没有对应的 {{ENDIF}}" % source)
+    return "".join(out)
+
+
 def render_text(text, values, source):
+    text = apply_conditionals(text, values, source)
+
     def sub(match):
         key = match.group(1)
         if key not in values:

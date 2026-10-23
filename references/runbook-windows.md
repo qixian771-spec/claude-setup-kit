@@ -18,7 +18,7 @@
 
 ## 推荐：一键安装 / 一键撤回（2026-10-23 实机验证）
 
-S2–S7 可以一次做完，但**先问清三件事再让用户双击**：同意装防火墙规则（Clash 一关就断网）、同意解绑 IPv6 和写浏览器策略、时区要改成哪个（`mirror.params.json` 的 `timezone_win`，默认 `Pacific Standard Time`；不想改就先不要用一键，分步跳过 S7）。然后 👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
+S2–S7 可以一次做完，但**先问清三件事再让用户双击**：同意装防火墙规则（Clash 一关就断网）、同意解绑 IPv6 和写浏览器策略、时区要改成哪个（`mirror.params.json` 的 `timezone_win`，默认 `Pacific Standard Time`；不想改就先不要用一键，分步跳过 S7）。然后 👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**（例外：防火墙规则只装了一部分时会被"已存在，拒绝覆盖"挡住——让用户先双击 `卸载防火墙规则.cmd` 再一键）。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
 
 撤回：👤 双击 `installers\win\一键撤回全部.cmd`：删规则、任务、策略值、体检工具，并照 `before.json` 把防火墙配置文件、时区、IPv6 改回去；守护历史与快照移到 `%USERPROFILE%\claude-setup-kit-uninstalled-<时间>`。Clash 的 TUN 由用户自己在 Clash Verge 里关。实机往返 14 项与安装前完全一致。
 
@@ -33,19 +33,21 @@ foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShor
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 导入新配置后代理页还是旧分组 | Clash Verge 的基础 `config.yaml` 被人塞了整套 dns/proxies/proxy-groups/rules，会覆盖任何订阅 | `clash.base_config` 会报；退出 Clash Verge，备份后删掉这几段 |
+| 导入新配置后代理页还是旧分组 | Clash Verge 的基础 `config.yaml` 被人塞了整套 dns/proxies/proxy-groups/rules，会覆盖任何订阅 | `clash.base_config` 会报；S1 配置阶段让用户退出 Clash Verge，备份后删掉这几段（"不退出 Clash"硬规则唯一的例外） |
 | 手写进 `profiles.yaml` 的配置卡能选中但不生效 | Clash Verge 不认外部注册的卡 | 一律用界面「新建 → 本地」导入 |
 | 启动 90 秒后满屏报错退出，日志 `can't download ASN.mmdb` | `IP-ASN` 规则要先联网下载数据库，没代理就超时；还会留下半截坏库 | 模板已删这条；旧配置删掉它并挪走 `ASN.mmdb` |
 | 丽萨（VLESS-REALITY）测速报错，其他节点正常 | 节点缺 `support-x25519mlkem768: true` | 模板已带 |
 | 关了 Clash Verge 窗口再开就起不来 / 卡在验证 | 强杀 `clash-verge.exe` 会留下孤儿 `verge-mihomo.exe`；服务模式的服务也会停 | 不要强杀；必须重来时停掉全部 `clash-verge*`/`verge-mihomo` 进程，再 `Start-Service clash_verge_service`，最后让用户自己双击打开 |
 | `.cmd` 里 UAC 之后什么都没执行 | 嵌套 `-Command "…\"…\"…"` 在 cmd 里被截断 | 已改为 `-File` 调脚本、脚本自提权、自写日志 |
-| `reg import 'Chrome策略.reg'` 报打不开文件 | reg.exe 不认中文路径 | 一键安装直接写注册表值；单独双击 .reg 仍可用 |
+| `reg import 'Chrome策略.reg'` 报打不开文件 | reg.exe 不认中文路径 | 一键安装直接写注册表值；单独双击 .reg 走的是 Explorer 不是 reg.exe，理论上可用但**未实测** |
 | `git clone` 报 `Connection was reset` / `Failed to connect to github.com` | 没有代理时国内连不上 GitHub（实测关 TUN 后两次失败、curl 15 秒超时） | 先在 Clash Verge 开系统代理再克隆；没有任何代理的机器让用户在别的设备 Download ZIP 拷过来 |
 | `mirror_check` 的 `dns.system`/`net.ipv6_off` 变 ❓ 并吐一段 CIM 错误 | `network_services` 还是默认的 `Ethernet`，中文系统网卡叫 `以太网` | 现在会直接报"网卡不存在（有: …）"；把 `网络连接` 里的名字写进 `mirror.params.json` |
 | 在 PowerShell 里跑 `py -3 tools\check.py` 或测试报 `FileNotFoundError` | PATH 里的 `bash` 是 System32 的 WSL 启动器，Git 没进 PATH | 现在会自动找 Git 自带的 bash；找不到就明说"跳过 sh 语法检查"（这两样是开发者工具，配机流程不需要跑） |
 | 游戏机装了雷神/迅游（WFP 驱动常驻） | 驱动在但加速器不运行时不影响 TUN 和防火墙规则 | 实验期间不开加速器；要打游戏前一键撤回、关 TUN |
 
 ## G0 约束表
+
+已知限制（未实测）：渲染时的 `USER_SID` 取自当前登录用户；如果日常用的是标准账户、UAC 弹的是另一个管理员账号的密码，一键安装在提权后渲染体检工具时拿到的仍是登录用户的 SID（渲染读的是控制台用户），但这种双账号场景没有在实机上验证过，交付时写明。
 
 同 macOS 手册 G0，外加：Clash Verge 必须用**服务模式**（否则核心以用户身份运行，会被 user-public 规则拦住）；网卡别名（`网络连接` 里显示的名字，如 `以太网` / `WLAN`）写进 `mirror.params.json` 的 `network_services`；Python 用 `py -3`（3.9+），仓库放在没有空格和中文的路径更省事（有也能跑）。
 
@@ -62,7 +64,7 @@ py -3 scripts\mirror_check.py --no-network
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
 2. AI：`py -3 scripts\render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
-3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；右键 → 编辑脚本 → 粘贴 `clash-profile.script.js` → 保存 → 激活；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
+3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；点这张卡设为当前（脚本 `clash-profile.script.js` **可选**，模板已带同样的 DNS 与 STUN 规则）；设置里系统代理开、DNS 覆写关；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
 4. 对账：`py -3 scripts\mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
 
 控制通道：Windows 版 Clash Verge 在命名管道 `\\.\pipe\verge-mihomo`（`params_win.clash_api`）；若用户另设了 `external-controller`，用 `--param clash_api=http://127.0.0.1:<端口>` 并设环境变量 `MIHOMO_SECRET`。TUN 适配器默认名 `Meta`（`params_win.tun_device`）。

@@ -194,6 +194,31 @@ class ComponentTests(RenderFixture):
         with self.assertRaises(render.RenderError):
             render.render_component("watch", self.values(), out)
 
+    def test_two_nodes_render_without_the_optional_socks5_node(self):
+        # NODE3 (socks5) is optional: without NODE3_* the proxy block and both group members disappear and nothing
+        # is left unrendered; with it, the socks5 proxy is present. START.md promises exactly this.
+        keys = {k for k in render.PLACEHOLDER.findall((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8")) if k.startswith("NODE")}
+        two = {k: "v-" + k.lower() for k in keys if not k.startswith("NODE3_")}
+        text = render.render_text((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8"), dict(self.values(), **two), "t")
+        self.assertNotIn("{{", text)
+        self.assertNotIn("v-node3", text)
+        self.assertNotIn("type: socks5", text)
+        self.assertNotIn("ENDIF", text.split("\nmixed-port", 1)[1])  # markers never survive into the YAML body
+        self.assertEqual(text.count("- 'v-node2_name'"), 2)
+        three = {k: "v-" + k.lower() for k in keys}
+        text3 = render.render_text((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8"), dict(self.values(), **three), "t")
+        self.assertIn("type: socks5", text3)
+        self.assertEqual(text3.count("- 'v-node3_name'"), 2)
+        self.assertNotIn("{{IF", text3)
+
+    def test_conditional_markers_must_balance(self):
+        with self.assertRaises(render.RenderError):
+            render.render_text("# {{IF X}}\na\n", {}, "t")
+        with self.assertRaises(render.RenderError):
+            render.render_text("a\n# {{ENDIF}}\n", {}, "t")
+        self.assertEqual(render.render_text("a\nb  # {{IF X}}\nc\n", {}, "t"), "a\nc\n")
+        self.assertEqual(render.render_text("a\nb  # {{IF X}}\nc\n", {"X": "1"}, "t"), "a\nb\nc\n")
+
     def test_clash_needs_node_values_and_rejects_bad_node_file(self):
         with self.assertRaises(render.RenderError):
             render.render_component("clash", self.values(), self.root / "c1")

@@ -1,6 +1,8 @@
 # claude-setup-kit — Clash Verge 本地配置模板（照参考机 2026-10-23 现状，节点全部换成占位符）
 # 渲染：python3 scripts/render.py --component clash --nodes <你的节点参数.json>；或手工把双花括号占位符换成真实值。
-# 导入 Clash Verge 后，把 templates/clash-profile.script.js 绑定为该配置的"脚本"（它写 DNS 并前置 STUN REJECT）。
+# 节点：NODE1（VLESS-REALITY，Claude 出口）和 NODE2（trojan，Google 出口）必填；NODE3（socks5）可选——不给 NODE3_* 时，
+#   render.py 会整个去掉 NODE3 的代理和分组成员（靠下面 "# IF NODE3_NAME" / "# ENDIF" 形式的条件标记）。
+# 导入 Clash Verge 后，脚本 templates/clash-profile.script.js 可选：模板里已有同样的 DNS 段和 STUN 拦截规则。
 # 分组：EXIT_GROUP 是 Claude 的固定出口（成员不许有 DIRECT）；GOOGLE_GROUP 只给 Google 系域名用，
 #   成员是主出口以外的节点——Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"，
 #   所以 Google 走另一个节点，Claude 的出口不动。两个分组的规则顺序：Claude 的 storage/fonts 精确规则在前，
@@ -133,6 +135,7 @@ proxies:
   sni: '{{NODE2_SNI}}'
   skip-cert-verify: false
   udp: true
+# {{IF NODE3_NAME}}
 - name: '{{NODE3_NAME}}'
   type: socks5
   server: '{{NODE3_SERVER}}'
@@ -140,18 +143,19 @@ proxies:
   username: '{{NODE3_USERNAME}}'
   password: '{{NODE3_PASSWORD}}'
   udp: false  # 参考机的住宅 socks5 不支持 UDP；确认你的支持再改成 true
+# {{ENDIF}}
 proxy-groups:
 - name: '{{EXIT_GROUP}}'
   type: select
   proxies:
   - '{{NODE1_NAME}}'
   - '{{NODE2_NAME}}'
-  - '{{NODE3_NAME}}'
+  - '{{NODE3_NAME}}'  # {{IF NODE3_NAME}}
 - name: '{{GOOGLE_GROUP}}'
   type: select
   proxies:
   - '{{NODE2_NAME}}'
-  - '{{NODE3_NAME}}'
+  - '{{NODE3_NAME}}'  # {{IF NODE3_NAME}}
 - name: GLOBAL
   type: select
   hidden: true

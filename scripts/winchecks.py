@@ -116,9 +116,16 @@ def check_ipv6_off(host, p, a):
     return PASS, ", ".join(seen) + "，无全局 IPv6"
 
 
+USER_LEVEL_APPS = {  # per-user installs live under %LOCALAPPDATA%, not Program Files
+    "Chrome": "%LOCALAPPDATA%/Google/Chrome/Application/chrome.exe",
+    "Edge": "%LOCALAPPDATA%/Microsoft/Edge/Application/msedge.exe",
+}
+
+
 def _registry_policy(host, p, key, want, app, label):
-    if host.lstat(app) is None:
-        return INFO, "未安装 %s（%s），跳过" % (label, app)
+    candidates = [app] + ([mc.expand(host, USER_LEVEL_APPS[label])] if label in USER_LEVEL_APPS else [])
+    if all(host.lstat(c) is None for c in candidates):
+        return INFO, "未安装 %s（找过 %s），跳过" % (label, "、".join(candidates))
     try:
         data = _ps_json(host, "Get-ItemProperty -Path %s | Select-Object %s" % (_q(key), ",".join(want)), "reg-" + label)
     except mc.HostError:

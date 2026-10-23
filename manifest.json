@@ -136,7 +136,7 @@
         "darwin",
         "win32"
       ],
-      "next": "退出 Clash Verge（托盘里退出），备份后从 config.yaml 删掉顶层的 dns / proxies / proxy-groups / rules 段，再打开 Clash Verge。这些段会覆盖所有订阅，导致选哪张配置都没用。"
+      "next": "这是 S1 配置阶段的例外：让用户在还没开始用 Claude 时退出 Clash Verge（托盘里退出），备份后从 config.yaml 删掉顶层的 dns / proxies / proxy-groups / rules 段，再打开 Clash Verge（已经在用 Claude 的机器先问用户什么时候方便）。这些段会覆盖所有订阅，导致选哪张配置都没用。"
     },
     {
       "id": "clash.mode",
@@ -169,7 +169,7 @@
       "layer": "代理",
       "title": "出口分组：手动、无 DIRECT、固定节点",
       "check": "clash_exit_group",
-      "next": "分组必须是 select 类型、成员不含 DIRECT/REJECT，当前选中 params.exit_node。不要为了验收切换节点。",
+      "next": "分组必须是 select 类型、成员不含 DIRECT/REJECT，当前选中 params.exit_node。S1 初次配置时让用户在代理页选到这个节点；之后不要为了验收反复切换。",
       "platforms": [
         "darwin",
         "win32"
@@ -180,7 +180,7 @@
       "layer": "代理",
       "title": "分流规则：Claude 域名→出口、STUN→REJECT、国内→DIRECT、兜底→出口",
       "check": "clash_rules",
-      "next": "按 templates/clash-verge.template.yaml 的 rules 段补齐缺的规则，重新激活配置。",
+      "next": "按 templates/clash-profile.template.yaml 的 rules 段补齐缺的规则，重新激活配置。",
       "platforms": [
         "darwin",
         "win32"
@@ -203,7 +203,7 @@
       "layer": "代理",
       "title": "Clash DNS：本地 53、fake-ip、Claude DoH 经出口、无 fallback",
       "check": "clash_dns_config",
-      "next": "按 templates/clash-verge.template.yaml 的 dns 段合并（不要整段替换），重新激活后再对账。",
+      "next": "按 templates/clash-profile.template.yaml 的 dns 段合并（不要整段替换），重新激活后再对账。",
       "platforms": [
         "darwin",
         "win32"
@@ -492,7 +492,7 @@
       "args": {
         "label_param": "ipv6_guard_label"
       },
-      "next": "双击 installers/安装IPv6守护.command。",
+      "next": "先 ls /Library/LaunchDaemons | grep -i ipv6：已经有别的 label 的守护就把它写进 mirror.params.json 的 ipv6_guard_label 重新对账，不要装；什么都没有才双击 installers/安装IPv6守护.command。",
       "platforms": [
         "darwin"
       ]
@@ -546,7 +546,7 @@
       "layer": "浏览器",
       "title": "Chrome 管理策略：WebRTC 禁非代理 UDP、DoH 关",
       "check": "chrome_policy",
-      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 隐私与安全性 → 描述文件 里安装；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。 Windows：双击 installers\\win\\Chrome策略.reg 导入注册表策略。",
+      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 通用 → 设备管理 里安装（macOS 12 及更早在 系统偏好设置 → 描述文件）；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。 Windows：双击 installers\\win\\Chrome策略.reg 导入注册表策略。",
       "platforms": [
         "darwin",
         "win32"
@@ -635,7 +635,7 @@
       "platforms": [
         "win32"
       ],
-      "next": "双击 installers\\win\\安装防火墙规则.cmd（它会启用全部配置文件再加规则）。"
+      "next": "双击 installers\\win\\一键安装全部.cmd（S2–S7 一次装完）或只装这一项的 安装防火墙规则.cmd；两者都会先启用全部三个防火墙配置文件再加规则。"
     },
     {
       "id": "wf.011",
@@ -659,7 +659,7 @@
           }
         ]
       },
-      "next": "双击 installers\\win\\安装防火墙规则.cmd（它会启用全部配置文件再加规则）。"
+      "next": "双击 installers\\win\\一键安装全部.cmd（S2–S7 一次装完）或只装这一项的 安装防火墙规则.cmd；两者都会先启用全部三个防火墙配置文件再加规则。"
     },
     {
       "id": "wf.020",
@@ -780,8 +780,8 @@
       "requires": [],
       "installer": null,
       "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A 建节点）",
-      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式；代理页把出口分组选到出口节点",
-      "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件和脚本，你在 Clash Verge 里导入、绑定脚本、开 TUN、选节点。"
+      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式、系统代理开、DNS 覆写关；代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
+      "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件，你在 Clash Verge 里导入、开 TUN、选出口节点和 Google 用的节点。"
     },
     {
       "id": "S2",
@@ -892,7 +892,8 @@
         "tool.claude_wall"
       ],
       "requires": [
-        "S5"
+        "S5",
+        "S6"
       ],
       "installer": "installers/安装体检工具.command",
       "log": "claude-wall",
@@ -1001,8 +1002,8 @@
       "requires": [],
       "installer": null,
       "ai_action": "py -3 scripts\\render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
-      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式 → 代理页把出口分组选到出口节点",
-      "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置和脚本；你在 Clash Verge 里装服务模式、导入、绑定脚本、开 TUN、选节点。"
+      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式、系统代理开、DNS 覆写关 → 代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
+      "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置；你在 Clash Verge 里装服务模式、导入、开 TUN、选出口节点和 Google 用的节点。"
     },
     {
       "id": "S2",
@@ -1021,7 +1022,7 @@
       "installer": "installers\\win\\一键安装全部.cmd",
       "log": "一键安装全部",
       "user_action": "确认 Clash 服务模式在运行、TUN 在，再双击 installers\\win\\一键安装全部.cmd（一次 UAC 装完 S2–S7，失败即停，可续跑）；也可以按组件单独双击",
-      "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。一键安装会一次做完这些：防火墙规则、自检与 IPv6 两个计划任务（会解绑网卡的 IPv6）、Chrome/Edge 的 WebRTC 与 DoH 策略、体检工具，还会把系统时区改成 mirror.params.json 里 timezone_win 的值（默认美国太平洋）。这几样都同意、时区也确认过，就双击“一键安装全部.cmd”，弹 UAC 点“是”；只想装一部分就分步双击各个安装器。"
+      "say": "装防火墙规则：Anthropic 整段、物理网卡的 DNS/STUN、以及你这个账户的公网连接都只准走 Clash 的 TUN；以后 Clash 一关电脑就上不了网（故意的）。一键安装会一次做完这些：防火墙规则（会把 Domain/Private/Public 三个防火墙配置文件都打开）、自检与 IPv6 两个计划任务（会解绑网卡的 IPv6）、Chrome/Edge 的 WebRTC 与 DoH 策略、体检工具，还会把系统时区改成 mirror.params.json 里 timezone_win 的值（默认美国太平洋）。这几样都同意、时区也确认过，就双击“一键安装全部.cmd”，弹 UAC 点“是”；只想装一部分就分步双击各个安装器。"
     },
     {
       "id": "S3",

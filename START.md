@@ -12,11 +12,11 @@ cd claude-setup-kit
 python3 scripts/mirror_check.py
 ```
 
-Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mirror_check.py`）。Windows 需要先装两样：**Git for Windows**（<https://git-scm.com/download/win>，默认选项即可）和 **Python 3.9+**（<https://www.python.org/downloads/windows/>，安装时勾上 *py launcher*）；装好后在 PowerShell 里 `git --version` 和 `py -3 --version` 都有输出才继续。还要装 **Clash Verge（Windows 版）**并在 设置 里**安装服务模式**（TUN 的硬前提，弹 UAC），见 [Windows 手册](references/runbook-windows.md) G0。这三样都让用户自己点安装包。
+Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mirror_check.py`）。Windows 需要先装两样：**Git for Windows**（<https://git-scm.com/download/win>，默认选项即可）和 **Python 3.9+**（<https://www.python.org/downloads/windows/>，安装时勾上 *py launcher*）；装好后在 PowerShell 里 `git --version` 和 `py -3 --version` 都有输出才继续。还要装 **Clash Verge（Windows 版）**并在 设置 里**安装服务模式**（TUN 的硬前提，弹 UAC），装法见 [Windows 手册](references/runbook-windows.md) S1 第 1 步。这三样都让用户自己点安装包。
 
-`mirror_check` 的"只读"是指**不改任何东西**：它会向 `www.cloudflare.com`（出口 IP 与国家）、`1.1.1.1` / `ns1.google.com`（DNS 上游）发探测，不碰任何 Anthropic 地址；查 PF 时用 `sudo -n`，没有免密 sudo 的机器那几项显示 ❓（提示会告诉你用 `sudo python3 scripts/mirror_check.py --only …` 重跑，不要当 ❌）。网络受限时加 `--no-network`，两项出口检查会变 ❓。
+`mirror_check` 的"只读"是指**不改任何东西**：它会向 `www.cloudflare.com`（出口 IP 与国家）、`1.1.1.1` / `ns1.google.com`（DNS 上游）发探测，还会在本机解析 `www.cloudflare.com`（`dig @127.0.0.1` 与系统解析器，证明 DNS 走了 Clash；这两条 `--no-network` 也不跳过），不碰任何 Anthropic 地址；查 PF 时用 `sudo -n`，没有免密 sudo 的机器那几项显示 ❓（提示会告诉你用 `sudo python3 scripts/mirror_check.py --only …` 重跑，不要当 ❌）。网络受限时加 `--no-network`，两项出口检查会变 ❓。
 
-问到出口节点名后，立刻把它写进仓库根目录的 `mirror.params.json`（git 忽略；机器上**已经有** IPv6 守护的才要写 `"ipv6_guard_label"`：先 `ls /Library/LaunchDaemons | grep -i ipv6`，有就把那个文件名去掉 `.plist` 填进去——参考机是 `com.niuniu.ipv6-guard`；新机器不写，用默认 `local.ipv6-guard`。写错或不写，`daemon.ipv6` 会 ❌，安装器会因脚本已存在拒装（EXIT=72），卸载器会因 label 不符拒卸（EXIT=73），都不会动已有守护）：
+问到出口节点名后，立刻把它写进仓库根目录的 `mirror.params.json`（git 忽略；机器上**已经有** IPv6 守护的才要写 `"ipv6_guard_label"`：先 `ls /Library/LaunchDaemons | grep -i ipv6`，有就把那个文件名去掉 `.plist` 填进去——参考机是 `com.niuniu.ipv6-guard`；新机器不写，用默认 `local.ipv6-guard`。写错或不写，`daemon.ipv6` 会 ❌，安装器会因脚本已存在拒装（EXIT=72），卸载器会因 label 不符拒卸（也是 EXIT=73：这个码统一表示"前置不符"，日志里写明是哪一样），都不会动已有守护）：
 
 ```json
 {"exit_node": "<出口节点名>"}
@@ -36,7 +36,7 @@ Windows 上把 `python3` 换成 `py -3`、路径用反斜杠（`py -3 scripts\mi
 
 | 路线 | 进入条件 | 做什么 | 产出 | 交回总入口时带什么 |
 |---|---|---|---|---|
-| **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：键名用本仓库 `templates/clash-profile.template.yaml` 里的 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（NODE1 是 VLESS-REALITY；trojan 用 `NODE2_NAME`、`NODE2_SERVER`、`NODE2_PORT`、`NODE2_PASSWORD`、`NODE2_SNI`；socks5 用 `NODE3_NAME`、`NODE3_SERVER`、`NODE3_PORT`、`NODE3_USERNAME`、`NODE3_PASSWORD`；`render.py` 对缺的键直接报错，所以至少要凑齐 NODE1 和 NODE2）；文件放私有目录，**不进任何仓库** |
+| **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：键名用本仓库 `templates/clash-profile.template.yaml` 里的 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（NODE1 是 VLESS-REALITY；trojan 用 `NODE2_NAME`、`NODE2_SERVER`、`NODE2_PORT`、`NODE2_PASSWORD`、`NODE2_SNI`；socks5 用 `NODE3_NAME`、`NODE3_SERVER`、`NODE3_PORT`、`NODE3_USERNAME`、`NODE3_PASSWORD`；`render.py` 对缺的键直接报错；NODE1 和 NODE2 必填，NODE3 可选——不给 NODE3_* 时模板里 socks5 那段和它在分组里的成员会被整个去掉）；文件放私有目录，**不进任何仓库** |
 | **B 配 Mac** | 有节点参数；macOS | 本仓库 [执行手册](references/runbook.md) S1–S12；每做完一步跑 `python3 scripts/next_step.py`，它会说下一步做什么 | `mirror_check` 全 ✅ + ippure 四项 | 全量对账表、日志路径、截图 |
 | **B′ 配 Windows 10/11** | 有节点参数；Windows | 本仓库 [Windows 手册](references/runbook-windows.md) S1–S9；命令用 `py -3 scripts\mirror_check.py`、`py -3 scripts\next_step.py`；S1 之后双击 `installers\win\一键安装全部.cmd`（一次 UAC 装完 S2–S7），测完或要打游戏前双击 `一键撤回全部.cmd` | 同 B | 同 B |
 | **C 清理重置** | 换账号、封号后重来、要关遥测/补分流 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则 | 清理验收 + 标识对比表 | `identifiers.py --compare` 退出 0 的输出 |
