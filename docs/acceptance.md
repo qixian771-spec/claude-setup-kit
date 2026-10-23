@@ -21,5 +21,5 @@ Haiku 子代理只拿 README 的"发给 AI 的一段话"，在去掉卸载脚本
 ## W1 Windows 对账（2026-10-22）
 
 - 局域网 Win10 19045 实机只读：`py -3 scripts\mirror_check.py --no-network --param network_services=以太网` → exit 1，✅1 ❌13 ❓8（Clash 未运行：命名管道不可达；`--no-network`）ℹ️2 👉1，无 Traceback；`clash.dns`、`wf.enabled`（只开 Private）、`sys.timezone`（China Standard Time）抓到的都是真实状态。
-- CI：`216fef0`/`beff452` 的 run 39876657822 macOS 通过、ubuntu 两个 job 失败——Linux runner 上 `platform_key()` 返回 `linux`，next_step 按该平台筛不到任何组件而报错；已改为非 Windows 一律用 macOS 组件表（后续 run 见下）。
+- CI：`216fef0`/`beff452` 的 run 39876657822 macOS 通过、ubuntu 两个 job 失败——Linux runner 上 `platform_key()` 返回 `linux`，next_step 按该平台筛不到任何组件而报错；已改为非 Windows 一律用 macOS 组件表；`c119b7f` run 39876890530 三个 job 全部通过。
 - 发现并修复：作为 `__main__` 运行时 `winchecks` 的 `import mirror_check` 是另一个模块对象，`HostError` 不相等导致 ❌ 被报成 ❓；已绑定并加回归测试。
