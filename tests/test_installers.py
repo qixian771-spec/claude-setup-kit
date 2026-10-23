@@ -82,7 +82,10 @@ class LauncherTests(unittest.TestCase):
             for script in re.findall(r"([\w-]+\.ps1)", text):
                 self.assertIn(script, shipped, script)
         for ps1 in (ROOT / "system-win").rglob("*.ps1"):
-            self.assertTrue(ps1.read_bytes().startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM（Windows PowerShell 5.1）" % ps1.name)
+            raw = ps1.read_bytes()
+            self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM（Windows PowerShell 5.1）" % ps1.name)
+            # PowerShell treats “ ” as string delimiters: Chinese quotes inside strings must be 「」.
+            self.assertNotRegex(raw.decode("utf-8-sig"), "[“”]", ps1.name)
         manifest_names = set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，]+)", json.dumps(MANIFEST, ensure_ascii=False)))
         self.assertIn("安装防火墙规则.cmd", manifest_names)
 

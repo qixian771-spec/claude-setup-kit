@@ -45,6 +45,7 @@ COMPONENTS = {
     "clash": ["templates/clash-profile.template.yaml", "templates/clash-profile.script.js"],
     # Windows (W3+): the PowerShell scripts read PARAMS.txt instead of placeholders.
     "win-firewall": ["system-win/firewall"],
+    "win-tasks": ["system-win/tasks", "system-win/firewall/common.ps1"],
 }
 
 

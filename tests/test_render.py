@@ -149,6 +149,23 @@ class ComponentTests(RenderFixture):
         self.assertLess(text.index("Refuse-Existing"), text.index("New-NetFirewallRule"))
         self.assertLess(text.index("clash_verge_service"), text.index("New-NetFirewallRule"))
 
+    def test_windows_tasks_component_renders_placeholders(self):
+        out = self.root / "wt"
+        written = render.render_component("win-tasks", self.values(), out)
+        names = sorted(Path(w).name for w in written)
+        self.assertEqual(names, ["common.ps1", "install-tasks.ps1", "ipv6-guard.ps1", "uninstall-tasks.ps1", "watch.ps1"])
+        watch = (out / "system-win/tasks/watch.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("$Tun = 'utun1024'", watch)
+        self.assertIn("$ExpectedExit = '丽萨美国'", watch)
+        self.assertIn("$ExitGroup = '出口选择'", watch)
+        self.assertNotIn("{{", watch)
+        guard = (out / "system-win/tasks/ipv6-guard.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("$Adapter = 'en9'", guard)  # the fixture's interface for the Wi-Fi service
+        install = (out / "system-win/tasks/install-tasks.ps1").read_text(encoding="utf-8-sig")
+        self.assertLess(install.index("拒绝覆盖"), install.index("Register-ScheduledTask"))
+        self.assertIn("NT AUTHORITY\\SYSTEM", install)
+        self.assertTrue((out / "system-win/firewall/common.ps1").is_file())  # dot-sourced by install-tasks.ps1
+
     def test_modes_preserved_and_vendor_copied(self):
         out = self.root / "upd"
         render.render_component("updater", self.values(), out)
