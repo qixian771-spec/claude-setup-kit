@@ -91,6 +91,10 @@ def load_allow():
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        # Windows consoles default to a code page that cannot print the Chinese messages.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     paths = [Path(p).resolve() for p in (argv or sys.argv[1:])] or tracked_files()
     allow = load_allow()
     total = 0

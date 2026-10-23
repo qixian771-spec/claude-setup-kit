@@ -40,6 +40,10 @@ def frontmatter(text):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        # Windows consoles default to a code page that cannot print the Chinese messages.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
     meta = frontmatter(skill)
     require(meta.get("name") == "claude-setup-kit", "skill name 不对")
