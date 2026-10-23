@@ -66,7 +66,25 @@ class LauncherTests(unittest.TestCase):
             self.assertTrue((self.LIB / script.replace("install-", "uninstall-")).is_file(), script)
             self.assertIn("tee -a", text)  # the log the AI reads afterwards
             self.assertEqual("sudo sh" in text, comp != "claude-wall", path.name)
-        self.assertEqual(seen, set(render.COMPONENTS) - {"clash"})
+        self.assertEqual(seen, {c for c in render.COMPONENTS if c != "clash" and not c.startswith("win-")})
+
+    def test_windows_launchers_are_crlf_and_name_existing_scripts(self):
+        win = ROOT / "installers" / "win"
+        shipped = {p.name for p in (ROOT / "system-win").rglob("*.ps1")}
+        for path in sorted(win.glob("*.cmd")):
+            raw = path.read_bytes()
+            self.assertIn(b"\r\n", raw, path.name)
+            self.assertNotRegex(raw.decode("utf-8"), r"(?<!\r)\n", path.name)
+            text = raw.decode("utf-8")
+            self.assertIn("chcp 65001", text)
+            self.assertIn("-Verb RunAs", text)
+            self.assertIn("EXIT=", text)
+            for script in re.findall(r"([\w-]+\.ps1)", text):
+                self.assertIn(script, shipped, script)
+        for ps1 in (ROOT / "system-win").rglob("*.ps1"):
+            self.assertTrue(ps1.read_bytes().startswith(b"\xef\xbb\xbf"), "%s 需要 UTF-8 BOM（Windows PowerShell 5.1）" % ps1.name)
+        manifest_names = set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，]+)", json.dumps(MANIFEST, ensure_ascii=False)))
+        self.assertIn("安装防火墙规则.cmd", manifest_names)
 
     def test_install_scripts_refuse_before_writing(self):
         # refuse_existing must come before the first install/cp/launchctl in every root installer.

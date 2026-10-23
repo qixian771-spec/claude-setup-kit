@@ -813,7 +813,7 @@ def main(argv=None, host=None):
     local = Path(args.manifest).parent / "mirror.params.json"
     if local.exists():
         # Per-machine overrides (git-ignored); same keys as manifest params.
-        params = apply_overrides(params, ["%s=%s" % (k, v) for k, v in json.loads(local.read_text(encoding="utf-8")).items()])
+        params = apply_overrides(params, ["%s=%s" % (k, v) for k, v in json.loads(local.read_text(encoding="utf-8-sig")).items()])
     params = apply_overrides(params, args.param)
     comps = manifest["components"]
     if args.only:

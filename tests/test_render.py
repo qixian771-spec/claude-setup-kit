@@ -59,6 +59,10 @@ class ParamTests(RenderFixture):
         with self.assertRaises(render.RenderError):
             self.values()
 
+    def test_local_params_with_utf8_bom_are_accepted(self):
+        (self.root / "mirror.params.json").write_bytes(b"\xef\xbb\xbf" + json.dumps({"ipv6_guard_label": "bom.label"}).encode("utf-8"))
+        self.assertEqual(self.values()["IPV6_LABEL"], "bom.label")
+
     def test_root_console_user_refused(self):
         class Root:
             pw_name, pw_dir, pw_uid = "root", "/var/root", 0
@@ -132,6 +136,18 @@ class ComponentTests(RenderFixture):
         guard = (out / "ipv6-guard/system/userbin/ipv6-guard.sh").read_text(encoding="utf-8")
         self.assertIn('IFACE="en9"', guard)
         self.assertIn('SERVICE="Wi-Fi"', guard)
+
+    def test_windows_firewall_component_renders_scripts_and_params(self):
+        out = self.root / "wf"
+        written = render.render_component("win-firewall", self.values(), out)
+        self.assertEqual(sorted(Path(w).name for w in written), ["common.ps1", "install-firewall.ps1", "uninstall-firewall.ps1"])
+        params = (out / "PARAMS.txt").read_text(encoding="utf-8")
+        self.assertIn("USER_SID=", params)
+        text = (out / "system-win/firewall/install-firewall.ps1").read_text(encoding="utf-8")
+        for needle in ("Refuse-Existing", "clash_verge_service", "Set-NetFirewallProfile", "-LocalUser", "-InterfaceAlias", "Assert-Rule"):
+            self.assertIn(needle, text)
+        self.assertLess(text.index("Refuse-Existing"), text.index("New-NetFirewallRule"))
+        self.assertLess(text.index("clash_verge_service"), text.index("New-NetFirewallRule"))
 
     def test_modes_preserved_and_vendor_copied(self):
         out = self.root / "upd"

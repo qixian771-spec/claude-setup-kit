@@ -43,6 +43,8 @@ COMPONENTS = {
                 "system/sudoers/claude-mac-env-mirror"],
     "claude-wall": ["system/userbin/claude-wall"],
     "clash": ["templates/clash-profile.template.yaml", "templates/clash-profile.script.js"],
+    # Windows (W3+): the PowerShell scripts read PARAMS.txt instead of placeholders.
+    "win-firewall": ["system-win/firewall"],
 }
 
 
@@ -110,7 +112,7 @@ def load_params(manifest_path, overrides, lookup_iface=True):
         params.update(manifest.get("params_win", {}))
     local = Path(manifest_path).parent / "mirror.params.json"
     if local.exists():
-        extra = json.loads(local.read_text(encoding="utf-8"))
+        extra = json.loads(local.read_text(encoding="utf-8-sig"))
         unknown = set(extra) - set(params)
         if unknown:
             raise RenderError("mirror.params.json 有未知参数: %s" % sorted(unknown))
@@ -142,7 +144,7 @@ def load_params(manifest_path, overrides, lookup_iface=True):
 
 
 def load_nodes(path):
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict) or not all(re.fullmatch(r"NODE\d+_[A-Z_]+", k) for k in data):
         raise RenderError("--nodes 文件必须是 {\"NODE1_NAME\": ..., \"NODE1_SERVER\": ...} 这样的 JSON 对象")
     return {k: str(v) for k, v in data.items()}
@@ -194,7 +196,8 @@ def render_component(name, values, out_dir):
     if leftovers:
         raise RenderError("渲染后仍有占位符: " + "; ".join(leftovers))
     summary = "\n".join("%s=%s" % (k, v) for k, v in values.items() if not k.startswith("NODE"))
-    (out_dir / "PARAMS.txt").write_text("component=%s\n%s\n" % (name, summary), encoding="utf-8")
+    # BOM so Windows PowerShell/Notepad read the Chinese adapter names correctly; harmless on macOS.
+    (out_dir / "PARAMS.txt").write_text("component=%s\n%s\n" % (name, summary), encoding="utf-8-sig")
     return written
 
 

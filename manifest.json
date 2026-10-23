@@ -627,7 +627,7 @@
           }
         ]
       },
-      "next": "双击 installers\\win\\安装防火墙规则.cmd。"
+      "next": "双击 installers\\win\\安装防火墙规则.cmd（它会启用全部配置文件再加规则）。"
     },
     {
       "id": "wf.020",
@@ -640,23 +640,38 @@
       "args": {
         "rules": [
           {
-            "name": "leak-guard dns",
+            "name": "leak-guard dns udp",
             "action": "Block",
             "direction": "Outbound"
           },
           {
-            "name": "leak-guard stun",
+            "name": "leak-guard dns tcp",
             "action": "Block",
             "direction": "Outbound"
           },
           {
-            "name": "leak-guard user-public",
+            "name": "leak-guard stun udp",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "leak-guard stun tcp",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "leak-guard user-public tcp",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "leak-guard user-public udp",
             "action": "Block",
             "direction": "Outbound"
           }
         ]
       },
-      "next": "双击 installers\\win\\安装防火墙规则.cmd；规则里的用户 SID 必须是当前登录用户。"
+      "next": "双击 installers\\win\\安装防火墙规则.cmd（需要 Clash 服务模式在运行、TUN 在）；规则里的用户 SID 必须是当前登录用户。"
     },
     {
       "id": "task.watch",

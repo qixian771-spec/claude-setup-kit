@@ -165,7 +165,7 @@ def main(argv=None):
         platform = args.platform or platform_key()
         manifest = load_manifest(args.manifest, platform)
         if args.input:
-            result = json.loads(Path(args.input).read_text(encoding="utf-8"))
+            result = json.loads(Path(args.input).read_text(encoding="utf-8-sig"))
         else:
             extra = (["--no-network"] if args.no_network else []) + [x for p in args.param for x in ("--param", p)]
             if args.platform:
