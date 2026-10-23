@@ -46,6 +46,7 @@ COMPONENTS = {
     # Windows (W3+): the PowerShell scripts read PARAMS.txt instead of placeholders.
     "win-firewall": ["system-win/firewall"],
     "win-tasks": ["system-win/tasks", "system-win/firewall/common.ps1"],
+    "win-tools": ["system-win/tools", "system-win/firewall/common.ps1"],
 }
 
 
@@ -135,6 +136,7 @@ def load_params(manifest_path, overrides, lookup_iface=True):
         "EXIT_NODE": params["exit_node"], "WIFI_SERVICE": service,
         "WIFI_IFACE": wifi_iface(service) if lookup_iface else "{{WIFI_IFACE}}",
         "IPV6_LABEL": params["ipv6_guard_label"],
+        "TIMEZONE_WIN": params.get("timezone_win", "n/a"),
     }
     for key, value in values.items():
         if not value:

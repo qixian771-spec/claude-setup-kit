@@ -166,6 +166,15 @@ class ComponentTests(RenderFixture):
         self.assertIn("NT AUTHORITY\\SYSTEM", install)
         self.assertTrue((out / "system-win/firewall/common.ps1").is_file())  # dot-sourced by install-tasks.ps1
 
+    def test_windows_tools_component_renders(self):
+        out = self.root / "wtools"
+        written = render.render_component("win-tools", self.values(), out)
+        self.assertEqual(sorted(Path(w).name for w in written), ["claude-wall.ps1", "common.ps1", "install-tools.ps1", "set-timezone.ps1"])
+        wall = (out / "system-win/tools/claude-wall.ps1").read_text(encoding="utf-8-sig")
+        self.assertIn("$Tun = 'utun1024'", wall)
+        self.assertNotIn("{{", wall)
+        self.assertIn("TIMEZONE_WIN=n/a", (out / "PARAMS.txt").read_text(encoding="utf-8-sig"))
+
     def test_modes_preserved_and_vendor_copied(self):
         out = self.root / "upd"
         render.render_component("updater", self.values(), out)

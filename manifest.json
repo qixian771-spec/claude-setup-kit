@@ -581,7 +581,7 @@
         "darwin",
         "win32"
       ],
-      "next_win": "设置 → 时间和语言 → 日期和时间：关自动，选节点所在时区（或管理员运行 tzutil /s）。"
+      "next_win": "双击 installers\\win\\设置时区.cmd（按参数 timezone_win，默认 Pacific Standard Time；或 设置 → 时间和语言 手动选）。"
     },
     {
       "id": "sys.language",
@@ -725,7 +725,7 @@
       "args": {
         "path": "%LOCALAPPDATA%/claude-setup-kit/claude-wall.ps1"
       },
-      "next": "双击 installers\\win\\安装体检工具.cmd。"
+      "next": "双击 installers\\win\\安装体检工具.cmd（不需要管理员）。"
     }
   ],
   "steps": [
@@ -941,6 +941,7 @@
     "network_services_note": "Windows adapter alias (InterfaceAlias), e.g. 以太网 / Ethernet / WLAN; set it in mirror.params.json.",
     "system_dns_accept": [],
     "chrome_app": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+    "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "timezone_win": "Pacific Standard Time"
   }
 }

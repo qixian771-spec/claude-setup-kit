@@ -77,8 +77,11 @@ class LauncherTests(unittest.TestCase):
             self.assertNotRegex(raw.decode("utf-8"), r"(?<!\r)\n", path.name)
             text = raw.decode("utf-8")
             self.assertIn("chcp 65001", text)
-            self.assertIn("-Verb RunAs", text)
+            if "体检工具" not in path.name:  # user-level installer runs without UAC
+                self.assertIn("-Verb RunAs", text)
             self.assertIn("EXIT=", text)
+            if not path.name.startswith("卸载"):
+                self.assertIn("render.py --component win-", text)
             for script in re.findall(r"([\w-]+\.ps1)", text):
                 self.assertIn(script, shipped, script)
         for ps1 in (ROOT / "system-win").rglob("*.ps1"):
@@ -88,6 +91,14 @@ class LauncherTests(unittest.TestCase):
             self.assertNotRegex(raw.decode("utf-8-sig"), "[“”]", ps1.name)
         manifest_names = set(re.findall(r"installers\\\\win\\\\([^\s（）,;。；：，]+)", json.dumps(MANIFEST, ensure_ascii=False)))
         self.assertIn("安装防火墙规则.cmd", manifest_names)
+        for name in manifest_names:
+            self.assertTrue((win / name).is_file(), "manifest 提到的 installers\\win\\%s 不存在" % name)
+        for reg in win.glob("*.reg"):
+            raw = reg.read_bytes()
+            self.assertTrue(raw.startswith(b"\xff\xfe"), "%s 必须是 UTF-16LE（regedit 要求）" % reg.name)
+            text = raw[2:].decode("utf-16-le")
+            self.assertTrue(text.startswith("Windows Registry Editor Version 5.00"), reg.name)
+            self.assertIn("WebRtcIPHandling", text)
 
     def test_install_scripts_refuse_before_writing(self):
         # refuse_existing must come before the first install/cp/launchctl in every root installer.
