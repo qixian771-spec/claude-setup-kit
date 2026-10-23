@@ -188,7 +188,8 @@ class FakeHost:
 
     def run(self, argv, timeout=20):
         # On a Windows runner pathlib builds the home-relative arguments with "\\"; the fixture keys use "/".
-        argv = [self._norm(a) for a in argv]
+        # (Not self._norm: the Windows fixture overrides that to map the other way for its file tables.)
+        argv = [str(a).replace("\\", "/") for a in argv]
         self.calls.append(list(argv))
         key = tuple(argv)
         if key not in self.cmds:
