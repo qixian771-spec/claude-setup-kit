@@ -16,11 +16,22 @@ BASELINE="${STATE_DIR}/baseline.tsv"
 # Written every 60 s by the root daemon local.net-guard-watch (card N3).
 WATCH_DIR='/var/db/NetGuardWatch'
 
+HELPER=/usr/local/libexec/claude-pf-helper
 if [ "$(id -u)" = 0 ]; then
 	SUDO=''
 else
 	SUDO='sudo -n'
 fi
+# After S5 the only command sudoers allows is the helper; before that (or on a machine with passwordless sudo)
+# the raw commands are used. Both paths are read-only.
+if [ -x "$HELPER" ] && [ "$(id -u)" != 0 ]; then PFH="sudo -n $HELPER"; else PFH=''; fi
+pf_info()    { if [ -n "$PFH" ]; then $PFH info; else $SUDO pfctl -s info; fi; }
+pf_rules()   { if [ -n "$PFH" ]; then $PFH rules "$1"; else $SUDO pfctl -a "$1" -sr; fi; }
+pf_vrules()  { if [ -n "$PFH" ]; then $PFH vrules "$1"; else $SUDO pfctl -a "$1" -vsr; fi; }
+pf_table()   { if [ -n "$PFH" ]; then $PFH table "$1" "$2"; else $SUDO pfctl -a "$1" -t "$2" -T show; fi; }
+watch_exists()  { if [ -n "$PFH" ]; then $PFH watch-exists; else $SUDO test -f "$WATCH_DIR/last"; fi; }
+watch_last()    { if [ -n "$PFH" ]; then $PFH watch-last; else $SUDO cat "$WATCH_DIR/last"; fi; }
+watch_history() { if [ -n "$PFH" ]; then $PFH watch-history; else $SUDO cat "$WATCH_DIR/history.log"; fi; }
 
 usage() {
 	echo "用法: claude-wall [show|all|baseline|snapshot|status|watch]"
@@ -36,7 +47,7 @@ usage() {
 }
 
 require_root() {
-	if ! $SUDO pfctl -s info >/dev/null 2>&1; then
+	if ! pf_info >/dev/null 2>&1; then
 		echo "错误: 需要 root 读 pfctl，且 sudo -n 不可用" >&2
 		exit 70
 	fi
@@ -45,7 +56,7 @@ require_root() {
 # 输出 anchor<TAB>rule<TAB>packets
 snapshot() {
 	for a in "$ANCHOR_WALL" "$ANCHOR_LEAK"; do
-		$SUDO pfctl -a "$a" -vsr 2>/dev/null | /usr/bin/awk -v a="$a" '
+		pf_vrules "$a" 2>/dev/null | /usr/bin/awk -v a="$a" '
 			/^[ \t]*\[/ {
 				if (rule != "" && match($0, /Packets:[ \t]*[0-9]+/)) {
 					p = substr($0, RSTART, RLENGTH)
@@ -61,19 +72,19 @@ snapshot() {
 }
 
 check_armed() {
-	status=$($SUDO pfctl -s info 2>/dev/null | /usr/bin/grep -c 'Status: Enabled')
+	status=$(pf_info 2>/dev/null | /usr/bin/grep -c 'Status: Enabled')
 	if [ "$status" != 1 ]; then
 		echo "警报: PF 未启用" >&2
 		return 2
 	fi
 	for a in "$ANCHOR_WALL" "$ANCHOR_LEAK"; do
-		n=$($SUDO pfctl -a "$a" -sr 2>/dev/null | /usr/bin/grep -c . )
+		n=$(pf_rules "$a" 2>/dev/null | /usr/bin/grep -c . )
 		if [ "$n" -lt 1 ]; then
 			echo "警报: 锚点未装载 $a" >&2
 			return 2
 		fi
 	done
-	$SUDO pfctl -a "$ANCHOR_WALL" -sr 2>/dev/null | /usr/bin/grep -q 'label "claude-wall-ipv4"' || {
+	pf_rules "$ANCHOR_WALL" 2>/dev/null | /usr/bin/grep -q 'label "claude-wall-ipv4"' || {
 		echo "警报: claude-wall-ipv4 规则缺失" >&2
 		return 2
 	}
@@ -202,11 +213,11 @@ cmd_snapshot() {
 # Latest result of the watch daemon. Returns 6 when it is missing, stale
 # (no run for 3 minutes) or anything other than OK.
 check_watch() {
-	if ! $SUDO test -f "$WATCH_DIR/last"; then
+	if ! watch_exists; then
 		echo "守护: 未安装或还没有结果（$WATCH_DIR/last）"
 		return 6
 	fi
-	line=$($SUDO cat "$WATCH_DIR/last")
+	line=$(watch_last)
 	ts=$(printf '%s' "$line" | cut -f1)
 	st=$(printf '%s' "$line" | cut -f2)
 	msg=$(printf '%s' "$line" | cut -f3)
@@ -229,9 +240,9 @@ cmd_watch() {
 	check_watch || rc=$?
 	since=$(date -u -v-24H '+%Y-%m-%dT%H:%M:%SZ')
 	echo "24 小时内异常次数（$since 起）:"
-	$SUDO cat "$WATCH_DIR/history.log" | /usr/bin/awk -F'\t' -v since="$since" '$1 >= since && $2 != "OK" && $2 != "" {n[$2]++} END {for (k in n) print "  " k ": " n[k]; if (!length(n)) print "  无"}'
+	watch_history | /usr/bin/awk -F'\t' -v since="$since" '$1 >= since && $2 != "OK" && $2 != "" {n[$2]++} END {for (k in n) print "  " k ": " n[k]; if (!length(n)) print "  无"}'
 	echo "最近 5 条异常记录:"
-	$SUDO cat "$WATCH_DIR/history.log" | /usr/bin/awk -F'\t' '$2 != "OK"' | tail -5 | /usr/bin/sed 's/^/  /'
+	watch_history | /usr/bin/awk -F'\t' '$2 != "OK"' | tail -5 | /usr/bin/sed 's/^/  /'
 	exit "$rc"
 }
 
@@ -244,7 +255,7 @@ cmd_status() {
 		rc=2
 	fi
 	echo "目标表:"
-	$SUDO pfctl -a "$ANCHOR_WALL" -t claude_wall_targets -T show 2>/dev/null | /usr/bin/sed 's/^/  /'
+	pf_table "$ANCHOR_WALL" claude_wall_targets 2>/dev/null | /usr/bin/sed 's/^/  /'
 	if check_dns; then
 		echo "DNS: fake-ip 正常"
 	else

@@ -45,7 +45,7 @@ COMPONENTS = {
               "system/LaunchDaemons/local.net-guard-watch.plist"],
     "ipv6-guard": ["system/userbin/ipv6-guard.sh", "system/LaunchDaemons/ipv6-guard.plist"],
     "updater": ["system/updater", "system/LaunchDaemons/local.claude-address-update.plist",
-                "system/sudoers/claude-mac-env-mirror"],
+                "system/sudoers/claude-mac-env-mirror", "system/libexec/claude-pf-helper"],
     "claude-wall": ["system/userbin/claude-wall"],
     "clash": ["templates/clash-profile.template.yaml", "templates/clash-profile.script.js"],
     # Windows (W3+): the PowerShell scripts read PARAMS.txt instead of placeholders.
@@ -214,8 +214,9 @@ def render_component(name, values, out_dir):
         raise RenderError("输出目录已存在，不覆盖: %s" % out_dir)
     try:
         return _render_into(name, values, out_dir)
-    except RenderError:
-        # Leave nothing behind on failure, so the same --out can be retried after the parameters are fixed.
+    except Exception:
+        # Leave nothing behind on any failure (bad parameter, undecodable file, I/O error), so the same --out can
+        # be retried after the cause is fixed.
         if out_dir.exists():
             import shutil
             shutil.rmtree(out_dir)

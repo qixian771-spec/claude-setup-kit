@@ -17,8 +17,8 @@
 		<string>/Library/Preferences/SystemConfiguration/preferences.plist</string>
 	</array>
 	<key>StandardErrorPath</key>
-	<string>{{HOME}}/.ipv6-guard.err</string>
+	<string>/var/log/ipv6-guard.err</string>
 	<key>StandardOutPath</key>
-	<string>{{HOME}}/.ipv6-guard.out</string>
+	<string>/var/log/ipv6-guard.out</string>
 </dict>
 </plist>

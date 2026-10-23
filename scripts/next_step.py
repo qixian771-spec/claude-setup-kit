@@ -77,7 +77,8 @@ def decide(manifest, result):
     evidence = {i["id"]: i for i in result["items"]}
     # skip_steps (mirror.params.json): steps the user declined. A step that requires a skipped step is skipped
     # too, and all of them are listed at the end so the delivery report names what was left out.
-    skips = set((result.get("params") or {}).get("skip_steps") or [])
+    raw_skips = (result.get("params") or {}).get("skip_steps") or []
+    skips = set(s.strip() for s in (raw_skips.split(",") if isinstance(raw_skips, str) else raw_skips) if s.strip())
     unknown = skips - {s["id"] for s in manifest["steps"]}
     if unknown:
         raise ValueError("skip_steps 里有不存在的步骤: %s" % sorted(unknown))
@@ -105,7 +106,7 @@ def decide(manifest, result):
     return {"step": None, "state": "all_passed", "exit": 0, "skipped": skipped,
             "ai_action": ("py -3 scripts/mirror_check.py" if platform_key() == "win32" else "python3 scripts/mirror_check.py") + "（贴全量输出）",
             "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
-            "say": "清单全部通过。最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。",
+            "say": ("清单全部通过。" if not skipped else "清单里除了你没授权的 %s 以外全部通过（这几项会写进交付）。" % "、".join(skipped)) + "最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。",
             "doc": "references/ippure-acceptance.md"}
 
 
@@ -131,6 +132,8 @@ def build(step, status, evidence, states, via=None):
     if sudo_only and platform_key() != "win32":
         # Nothing here is known to be missing: the read-only check itself needs root (pfctl / profiles -P). The AI
         # never runs sudo; the user double-clicks the read-only elevated check and we read its JSON back.
+        for f in failing:
+            f["next"] = ""  # the component's own next would say "double-click the installer" — wrong here
         out.update({
             "installer": "installers/提权对账.command", "log": "mirror-sudo", "ai_action": None,
             "user_action": "双击 installers/提权对账.command（只读对账，要开机密码，什么都不装）",
@@ -152,7 +155,7 @@ MARK = {PASS: "✅", FAIL: "❌", UNKNOWN: "❓", INFO: "ℹ️", MANUAL: "👉"
 
 def params_hint(manifest_path, overrides=()):
     local = Path(manifest_path).parent / "mirror.params.json"
-    if local.exists() or overrides:
+    if local.exists() or any(str(o).startswith("exit_node=") for o in overrides):
         return None
     return ("提醒: 仓库根目录没有 mirror.params.json，对账用的是参考机默认参数（出口节点 %s）。"
             "先按 START.md 第 0 步写入本机参数（exit_node；Mac 已有 IPv6 守护的还要 ipv6_guard_label / ipv6_guard_script；"
@@ -163,7 +166,7 @@ def params_hint(manifest_path, overrides=()):
 def render(out):
     skipped_line = ("未授权跳过（交付时照抄）: " + "；".join("%s（%s）" % kv for kv in out["skipped"].items())) if out.get("skipped") else None
     if out["state"] == "all_passed":
-        head = ["# 全部步骤通过 → 做 ippure 验收"] + ([skipped_line] if skipped_line else [])
+        head = ["# 全部步骤通过（除未授权跳过的）→ 做 ippure 验收" if skipped_line else "# 全部步骤通过 → 做 ippure 验收"] + ([skipped_line] if skipped_line else [])
         return "\n".join(head + ["AI 先运行: " + out["ai_action"], "让用户做: " + out["user_action"],
                                  "对用户说: “%s”" % out["say"], "记录格式: " + out["doc"]])
     lines = ["# 现在做：%s %s" % (out["step"], out["title"])]
@@ -217,6 +220,8 @@ def main(argv=None):
         platform = args.platform or platform_key()
         manifest = load_manifest(args.manifest, platform)
         if args.input:
+            if args.param or args.no_network:
+                raise ValueError("--input 读的是已有结果，--param/--no-network 对它无效；要改参数就重新对账（或改 mirror.params.json）")
             result = json.loads(Path(args.input).read_text(encoding="utf-8-sig"))
         else:
             extra = (["--no-network"] if args.no_network else []) + [x for p in args.param for x in ("--param", p)]

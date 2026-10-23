@@ -725,15 +725,31 @@ class SystemTests(unittest.TestCase):
         _, items, _ = run_json(host, "--only", "chrome.policy")
         self.assertEqual(items["chrome.policy"]["status"], mc.PASS)
 
-    def test_ipv6_guard_script_must_be_root_owned_under_usr_local(self):
+    def test_ipv6_guard_script_must_be_root_owned_wherever_it_lives(self):
         host = FakeHost()
         host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(501, 0o100755)
         _, items, _ = run_json(host, "--only", "ipv6.script")
         self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
         self.assertIn("root 持有", items["ipv6.script"]["evidence"])
-        # The reference Mac points the parameter at its older user-level script, which is accepted as is.
+        # Pointing the parameter at a user-owned script (the old hand-installed guard) must not turn it green.
         _, items, _ = run_json(host, "--only", "ipv6.script", "--param", "ipv6_guard_script=~/.local/bin/ipv6-guard.sh")
-        self.assertEqual(items["ipv6.script"]["status"], mc.PASS)
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        self.assertIn("迁移IPv6守护", items["ipv6.script"]["evidence"])
+        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(0, 0o100775)  # group-writable: still no
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+
+    def test_privileged_commands_go_through_the_root_helper_when_installed(self):
+        host = FakeHost()
+        host.stats[mc.PF_HELPER] = Stat(0, 0o100755)
+        host.cmds[("sudo", "-n", mc.PF_HELPER, "info")] = (0, "Status: Enabled\n", "")
+        rc, out, _ = mc.Host.priv(host, ["pfctl", "-si"])
+        self.assertEqual(out, "Status: Enabled\n")
+        self.assertEqual(mc.helper_argv(["pfctl", "-a", "com.apple/010.x", "-sr"]), ["rules", "com.apple/010.x"])
+        self.assertEqual(mc.helper_argv(["pfctl", "-a", "a", "-t", "t", "-T", "show"]), ["table", "a", "t"])
+        self.assertEqual(mc.helper_argv(["cat", "/var/db/NetGuardWatch/last"]), ["watch-last"])
+        self.assertEqual(mc.helper_argv(["profiles", "-P"]), ["profiles"])
+        self.assertIsNone(mc.helper_argv(["pfctl", "-d"]))
 
     def test_language_is_info_either_way(self):
         host = FakeHost()

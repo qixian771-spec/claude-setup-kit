@@ -7,6 +7,13 @@ param([Parameter(Mandatory = $true)][string]$Repo, [string]$Log)
 Enter-Elevated $PSBoundParameters $PSCommandPath
 Invoke-Logged $Log {
     Need-Admin
+    # Everything below renders and installs for the current identity. If UAC was answered as another administrator,
+    # the firewall SID and the per-user tools would belong to that account: stop before touching anything.
+    $console = (Get-CimInstance Win32_ComputerSystem).UserName
+    if (-not $console) { throw '无法确定桌面登录用户（例如远程桌面会话）：一键安装需要在本机桌面上运行' }
+    $me = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $csid = (New-Object System.Security.Principal.NTAccount($console)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+    if ($csid -ne $me.User.Value) { throw "UAC 用的是 $($me.Name)，不是桌面用户 $console：一键安装会把规则和工具装给错误的账号。请让桌面用户自己是管理员，或分步双击各安装器" }
     Set-Location $Repo
     $root = 'C:\ProgramData\claude-setup-kit'
     if (-not (Test-Path $root)) { New-Item -ItemType Directory -Path $root | Out-Null }

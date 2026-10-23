@@ -135,11 +135,9 @@ class ComponentTests(RenderFixture):
         self.assertTrue(sudoers.rstrip().splitlines()[-1].startswith("tester ALL=(root) NOPASSWD:"))
         self.assertNotIn("NOPASSWD: ALL", sudoers)
         rule = sudoers.rstrip().splitlines()[-1]
-        # A sudoers "*" also matches "/": no wildcard may reach outside the pinned paths, and no awk program as root.
-        self.assertNotIn("/etc/pf.anchors/*", rule)
-        self.assertNotIn("awk", rule)
-        self.assertNotIn("mkdir -m 700 *", rule)
-        self.assertIn("/usr/bin/profiles -P", rule)
+        # A sudoers "*" matches "/" and spaces: the only thing allowed is the fixed root helper, no wildcards at all.
+        self.assertEqual(rule, "tester ALL=(root) NOPASSWD: /usr/local/libexec/claude-pf-helper")
+        self.assertTrue((out / "updater/system/libexec/claude-pf-helper").exists())
         plist = (out / "ipv6-guard/system/LaunchDaemons/ipv6-guard.plist").read_text(encoding="utf-8")
         self.assertIn("<string>local.ipv6-guard</string>", plist)
         guard = (out / "ipv6-guard/system/userbin/ipv6-guard.sh").read_text(encoding="utf-8")

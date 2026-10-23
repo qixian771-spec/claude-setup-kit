@@ -152,3 +152,51 @@ class Ipv6UninstallGuardTests(unittest.TestCase):
         self.assertLess(guard, text.index("rm -f"), "the existence check must come before any rm")
         self.assertIn("exit 73", text)
 
+
+class RootHelperTests(unittest.TestCase):
+    HELPER = ROOT / "system" / "libexec" / "claude-pf-helper"
+
+    def run_helper(self, *args):
+        sys.path.insert(0, str(ROOT / "tools"))
+        import check as check_tool
+        sh = check_tool.shell_path("sh")
+        if not sh:
+            self.skipTest("no POSIX sh on this machine")
+        return subprocess.run([sh, str(self.HELPER)] + list(args), capture_output=True, encoding="utf-8", errors="replace")
+
+    def test_sudoers_allows_exactly_the_helper_and_nothing_else(self):
+        rule = (ROOT / "system" / "sudoers" / "claude-mac-env-mirror").read_text(encoding="utf-8").rstrip().splitlines()[-1]
+        self.assertEqual(rule, "{{USER}} ALL=(root) NOPASSWD: /usr/local/libexec/claude-pf-helper")
+        self.assertNotIn("*", rule)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS binaries")
+    def test_every_absolute_command_in_the_helper_exists_on_macos(self):
+        # /usr/bin/test does not exist on macOS (only /bin/test); a sudoers or helper path that is not a real file
+        # silently breaks the stranger's machine while the reference Mac (NOPASSWD: ALL) never notices.
+        text = self.HELPER.read_text(encoding="utf-8")
+        for path in sorted(set(re.findall(r"(?<![\w/])(/(?:usr|bin|sbin)/[A-Za-z0-9_./-]+)", text))):
+            if path.startswith(("/usr/bin/", "/bin/", "/sbin/", "/usr/sbin/")):
+                self.assertTrue(Path(path).exists(), path)
+
+    def test_helper_rejects_bad_arguments_before_doing_anything(self):
+        for args in (["rules", "a;b"], ["rules"], ["table", "x", "bad name"], ["table-add", "x", "t", "203.0.113.4", "5;6"],
+                     ["kill", "-k"], ["info", "extra"], ["bogus"], []):
+            proc = self.run_helper(*args)
+            self.assertEqual(proc.returncode, 64, args)
+            self.assertNotIn("必须由 root", proc.stderr, args)
+        proc = self.run_helper("info")  # valid, but we are not root: refused with the root message, nothing run
+        self.assertEqual(proc.returncode, 64)
+        self.assertIn("必须由 root", proc.stderr)
+
+    def test_updater_and_claude_wall_only_use_helper_subcommands(self):
+        helper_cmds = set(re.findall(r"^\t([a-z-]+)\)", self.HELPER.read_text(encoding="utf-8"), re.M))
+        updater = (ROOT / "system" / "updater" / "update_shared_ip_wall.py").read_text(encoding="utf-8")
+        self.assertNotIn("'/sbin/pfctl'", updater)
+        self.assertNotIn("'/usr/bin/install'", updater)
+        for cmd in re.findall(r"root\('([a-z-]+)'", updater):
+            self.assertIn(cmd, helper_cmds, cmd)
+        wall = (ROOT / "system" / "userbin" / "claude-wall").read_text(encoding="utf-8")
+        for cmd in re.findall(r"\$PFH ([a-z-]+)", wall):
+            self.assertIn(cmd, helper_cmds, cmd)
+        self.assertNotIn("$SUDO awk", wall)
+

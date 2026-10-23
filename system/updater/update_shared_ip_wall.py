@@ -261,16 +261,15 @@ def apply_update(backend, confirmed, proxies):
     return {'added_live': ordered(union - active), 'retained': ordered(active), 'targets': ordered(union)}
 
 
-def run(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=15).stdout
+HELPER = '/usr/local/libexec/claude-pf-helper'  # the only command sudoers allows; see system/libexec/claude-pf-helper
 
 
-def root(*args):
-    return run('/usr/bin/sudo', '-n', *args)
+def run(*args, input=None):
+    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=15, input=input).stdout
 
 
-def pf(*args):
-    return root('/sbin/pfctl', *args)
+def root(*args, input=None):
+    return run('/usr/bin/sudo', '-n', HELPER, *args, input=input)
 
 
 def proxy_config():
@@ -290,37 +289,31 @@ def proxy_config():
 
 class SystemBackend:
     def snapshot(self):
-        require('Status: Enabled' in pf('-s', 'info'), 'PF disabled')
-        require('anchor "com.apple/*"' in pf('-sr'), 'Root anchor hook missing')
-        require(pf('-a', ANCHOR, '-sr') == ACTIVE_RULES, 'Active rules changed')
+        require('Status: Enabled' in root('info'), 'PF disabled')
+        require('anchor "com.apple/*"' in root('root-rules'), 'Root anchor hook missing')
+        require(root('rules', ANCHOR) == ACTIVE_RULES, 'Active rules changed')
         require(not RULES.is_symlink() and run('/usr/bin/stat', '-f', '%u:%Lp', str(RULES)).strip() == '0:644', 'Unsafe rules file')
-        active = {exact_ip(v.strip()) for v in pf('-a', ANCHOR, '-t', TABLE, '-T', 'show').splitlines()}
+        active = {exact_ip(v.strip()) for v in root('table', ANCHOR, TABLE).splitlines()}
         require(bool(active), 'Empty live table')
         return active, parse_rules(RULES.read_text())
 
     def persist(self, values):
         text = render_rules(values)
         original = RULES.read_bytes()
-        staging = str(RULES) + '.pending-' + uuid.uuid4().hex
-        backup = str(BACKUP_DIR / ('rules-before-' + uuid.uuid4().hex + '.pf'))
-        with tempfile.TemporaryDirectory(prefix='claude-wall-update-') as tmp:
-            p = Path(tmp) / 'rules.pf'; p.write_text(text)
-            pf('-n', '-a', ANCHOR, '-f', str(p))
-            require(RULES.read_bytes() == original, 'Concurrent rules change')
-            root('/usr/bin/install', '-o', 'root', '-g', 'wheel', '-m', '600', str(RULES), backup)
-            root('/usr/bin/install', '-o', 'root', '-g', 'wheel', '-m', '644', str(p), staging)
-            require(Path(staging).read_text() == text and RULES.read_bytes() == original, 'Staging/concurrency mismatch')
-            with open(staging, 'rb') as file:
-                os.fsync(file.fileno())
-            root('/bin/mv', '-f', staging, str(RULES))
-            require(parse_rules(RULES.read_text()) == values, 'Persistent readback mismatch')
+        root('check', ANCHOR, input=text)
+        require(RULES.read_bytes() == original, 'Concurrent rules change')
+        # The helper validates again, backs the live file up under /var/db/ClaudeDirectWall, stages next to it and
+        # renames atomically; we only ever hand it the rule text on stdin.
+        root('persist', input=text)
+        require(RULES.read_text() == text, 'Persistent readback mismatch (content)')
+        require(parse_rules(RULES.read_text()) == values, 'Persistent readback mismatch')
 
     def add(self, values):
-        pf('-a', ANCHOR, '-t', TABLE, '-T', 'add', *ordered(values))
+        root('table-add', ANCHOR, TABLE, *ordered(values))
 
     def kill_states(self, values):
         for ip in ordered(values):
-            pf('-k', '::/0' if ':' in ip else '0.0.0.0/0', '-k', ip)
+            root('kill', ip)
 
 
 def main():
@@ -355,7 +348,7 @@ def main():
         require(CONFIG.read_bytes() == raw, 'Proxy configuration changed during audit')
         if args.apply:
             report['phase'] = 'acquire_update_lock'
-            root('/bin/mkdir', '-m', '700', LOCK); locked = True
+            root('lock'); locked = True
             # Repeat freshness and proxy checks under the lock; never accept saved evidence as input.
             current_raw, current_proxies = proxy_config()
             require(current_raw == raw, 'Proxy changed before apply')
@@ -376,7 +369,7 @@ def main():
     finally:
         try:
             if locked:
-                root('/bin/rmdir', LOCK)
+                root('unlock')
         except Exception:
             report['status'] = 'STOPPED_LOCK_CLEANUP_FAILED'
             raise

@@ -14,7 +14,7 @@
 set -u
 
 FLAG="{{HOME}}/.ipv6-guard-off"
-LOG="{{HOME}}/.ipv6-guard.log"
+LOG="/var/log/ipv6-guard.log"  # root writes here, never under the user's HOME (symlink → arbitrary root write)
 SERVICE="{{WIFI_SERVICE}}"
 IFACE="{{WIFI_IFACE}}"
 

@@ -4,8 +4,8 @@
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
 pkg="/Library/Application Support/ClaudeDirectWallUpdater"; state="$MIRROR_HOME/Library/Application Support/ClaudeDirectWallUpdater"
-plist=$(src system/LaunchDaemons/local.claude-address-update.plist); sudoers=$(src system/sudoers/claude-mac-env-mirror)
-refuse_existing "$pkg" "$state" /Library/LaunchDaemons/local.claude-address-update.plist /etc/sudoers.d/claude-mac-env-mirror
+plist=$(src system/LaunchDaemons/local.claude-address-update.plist); sudoers=$(src system/sudoers/claude-mac-env-mirror); helper=$(src system/libexec/claude-pf-helper)
+refuse_existing "$pkg" "$state" /Library/LaunchDaemons/local.claude-address-update.plist /etc/sudoers.d/claude-mac-env-mirror /usr/local/libexec/claude-pf-helper
 [ -x /usr/local/libexec/claude-direct-wall ] || { echo "先装 Claude 直连墙（010）" >&2; exit 73; }
 [ -d "$BUILD/system/updater/vendor/ruamel/yaml" ] || { echo "缺少 vendor/ruamel" >&2; exit 71; }
 visudo -cf "$sudoers" >/dev/null || { echo "sudoers 规则语法错误，停止" >&2; exit 65; }
@@ -17,6 +17,9 @@ mkdir -p "$pkg"; chown root:wheel "$pkg"; chmod 755 "$pkg"
    | sed '$ s/,$//' | { echo '{'; cat; echo '}'; } > "$pkg/sha256.json"
 chown root:wheel "$pkg/sha256.json"; chmod 644 "$pkg/sha256.json"
 install -d -o "$MIRROR_USER" -m 700 "$state"
+# The helper is the only command the sudoers rule allows; it must be root-owned and in place before the rule.
+install -d -o root -g wheel -m 755 /usr/local/libexec
+install -o root -g wheel -m 755 "$helper" /usr/local/libexec/claude-pf-helper
 install -o root -g wheel -m 440 "$sudoers" /etc/sudoers.d/claude-mac-env-mirror
 install -o root -g wheel -m 644 "$plist" /Library/LaunchDaemons/local.claude-address-update.plist
 launchctl bootstrap system /Library/LaunchDaemons/local.claude-address-update.plist

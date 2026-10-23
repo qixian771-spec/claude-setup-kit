@@ -546,7 +546,8 @@
       "check": "user_file",
       "args": {
         "path_param": "ipv6_guard_script",
-        "executable": true
+        "executable": true,
+        "root_owned": true
       },
       "next": "见 daemon.ipv6。",
       "platforms": [

@@ -5,7 +5,7 @@
 ## 0. 说话原则
 
 - 用户只做 👤 的事：双击一个文件、输一次密码、在某个界面点一个按钮、截一张图。（手册里的 👤 和 `mirror_check` 输出里的 👉 人工项是同一类事。）
-- **Windows 用户**：本页的 `.command`、系统设置路径都是 macOS 的；Windows 每一步对用户说的话用 `manifest.json` 里 `steps_win` 的 `say`（`py -3 scripts\next_step.py` 会原样打印），其余原则相同。
+- **Windows 用户**：本页的 `.command`、系统设置路径都是 macOS 的；Windows 每一步对用户说的话用 `manifest.json` 里 `steps_win` 的 `say`（`py -3 scripts/next_step.py` 会原样打印），其余原则相同。
 - 每次让用户动手前先说"做完会看到什么"，做完后 AI 读日志再回话，不问"成功了吗"。
 - 失败就说哪一步、什么原因、下一步是什么；不说"应该没问题"。
 - 不让用户切换出口节点、退出 Clash、关 TUN；用户正在用 Claude 时不让 Clash 重新激活。

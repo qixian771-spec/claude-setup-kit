@@ -1,0 +1,66 @@
+#!/bin/sh
+# claude-pf-helper — the ONLY command the kit's sudoers rule lets the desktop user run as root.
+# Every subcommand is a fixed, argument-checked wrapper; nothing here takes a path, an option or a program from the
+# caller. (A sudoers "*" also matches "/" and spaces, so any wildcard rule for install/mv/awk/pfctl was a root shell.)
+# Callers: system/updater/update_shared_ip_wall.py, system/userbin/claude-wall, scripts/mirror_check.py.
+set -eu
+PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH
+RULES=/etc/pf.anchors/local.claude-direct-wall
+BACKUP_DIR=/var/db/ClaudeDirectWall
+LOCK_DIR=/var/run/claude-direct-wall
+WATCH_DIR=/var/db/NetGuardWatch
+
+die() { echo "claude-pf-helper: $*" >&2; exit 64; }
+anchor_ok() { case "$1" in ""|-*|*[!A-Za-z0-9._/-]*|*/*/*) return 1;; esac; return 0; }
+name_ok() { case "$1" in ""|-*|*[!A-Za-z0-9_-]*) return 1;; esac; return 0; }
+ip_ok() { case "$1" in ""|-*|*[!0-9A-Fa-f.:/]*) return 1;; esac; return 0; }
+
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+	info|root-rules|lock|unlock|watch-exists|watch-last|watch-history|profiles|persist)
+		[ $# -eq 0 ] || die "${cmd} 不带参数" ;;
+	rules|vrules|check)
+		[ $# -eq 1 ] && anchor_ok "$1" || die "用法: ${cmd} <anchor>" ;;
+	table)
+		[ $# -eq 2 ] && anchor_ok "$1" && name_ok "$2" || die "用法: table <anchor> <table>" ;;
+	table-add)
+		[ $# -ge 3 ] && anchor_ok "$1" && name_ok "$2" || die "用法: table-add <anchor> <table> <ip>..."
+		i=0; for arg; do i=$((i+1)); [ "$i" -le 2 ] && continue; ip_ok "$arg" || die "地址不合法: ${arg}"; done ;;
+	kill)
+		[ $# -eq 1 ] && ip_ok "$1" || die "用法: kill <ip>" ;;
+	*)
+		die "未知子命令 '${cmd}'（info root-rules rules vrules table table-add kill check persist lock unlock watch-exists watch-last watch-history profiles）" ;;
+esac
+[ "$(id -u)" = 0 ] || die "必须由 root 运行（通过 sudo -n）"
+
+case "$cmd" in
+	info)          exec /sbin/pfctl -s info ;;
+	root-rules)    exec /sbin/pfctl -sr ;;
+	rules)         exec /sbin/pfctl -a "$1" -sr ;;
+	vrules)        exec /sbin/pfctl -a "$1" -vsr ;;
+	table)         exec /sbin/pfctl -a "$1" -t "$2" -T show ;;
+	table-add)     a=$1; t=$2; shift 2; exec /sbin/pfctl -a "$a" -t "$t" -T add "$@" ;;
+	kill)          case "$1" in *:*) exec /sbin/pfctl -k '::/0' -k "$1";; *) exec /sbin/pfctl -k '0.0.0.0/0' -k "$1";; esac ;;
+	check)
+		tmp=$(mktemp /tmp/claude-pf-check.XXXXXX); cat > "$tmp"
+		if /sbin/pfctl -n -a "$1" -f "$tmp"; then rc=0; else rc=$?; fi
+		rm -f "$tmp"; exit "$rc" ;;
+	persist)
+		# New rules for the direct wall come on stdin: validate, back up the live file, stage next to it, atomic mv.
+		tmp=$(mktemp /tmp/claude-pf-persist.XXXXXX); cat > "$tmp"
+		[ -s "$tmp" ] || { rm -f "$tmp"; die "stdin 为空"; }
+		/sbin/pfctl -n -a local.claude-direct-wall -f "$tmp" || { rm -f "$tmp"; die "规则语法没过，没有改动"; }
+		[ -d "$BACKUP_DIR" ] || mkdir -m 700 "$BACKUP_DIR"
+		install -o root -g wheel -m 600 "$RULES" "$BACKUP_DIR/rules-before-$(date +%Y%m%d-%H%M%S)-$$.pf"
+		staging=$(mktemp "$RULES.pending-XXXXXX")
+		install -o root -g wheel -m 644 "$tmp" "$staging"; rm -f "$tmp"
+		mv -f "$staging" "$RULES"
+		echo "persisted $RULES" ;;
+	lock)          [ -d "$LOCK_DIR" ] || mkdir -m 755 "$LOCK_DIR"; exec mkdir -m 700 "$LOCK_DIR/update.lock" ;;
+	unlock)        exec rmdir "$LOCK_DIR/update.lock" ;;
+	watch-exists)  exec test -f "$WATCH_DIR/last" ;;
+	watch-last)    exec cat "$WATCH_DIR/last" ;;
+	watch-history) exec cat "$WATCH_DIR/history.log" ;;
+	profiles)      exec /usr/bin/profiles -P ;;
+esac

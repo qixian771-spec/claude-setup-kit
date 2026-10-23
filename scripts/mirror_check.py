@@ -73,6 +73,29 @@ def dechunk(body):
         out, rest = out + rest[:size], rest[size + 2:]
 
 
+PF_HELPER = "/usr/local/libexec/claude-pf-helper"
+
+
+def is_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+def helper_argv(argv):
+    """Map the raw privileged commands to claude-pf-helper subcommands (see system/libexec/claude-pf-helper)."""
+    a = list(argv)
+    if a == ["pfctl", "-si"]:
+        return ["info"]
+    if len(a) == 4 and a[:2] == ["pfctl", "-a"] and a[3] == "-sr":
+        return ["rules", a[2]]
+    if len(a) == 7 and a[:2] == ["pfctl", "-a"] and a[3] == "-t" and a[5:] == ["-T", "show"]:
+        return ["table", a[2], a[4]]
+    if a == ["cat", "/var/db/NetGuardWatch/last"]:
+        return ["watch-last"]
+    if a == ["profiles", "-P"]:
+        return ["profiles"]
+    return None
+
+
 class Host:
     """Every query the checks make goes through here, so tests can replace it."""
 
@@ -94,8 +117,11 @@ class Host:
         return proc.returncode, proc.stdout, proc.stderr
 
     def priv(self, argv, timeout=20):
-        if os.geteuid() == 0:
+        if is_root():
             return self.run(argv, timeout)
+        mapped = helper_argv(argv)
+        if mapped and self.lstat(PF_HELPER) is not None:
+            argv = [PF_HELPER] + mapped  # after S5 sudoers only allows the helper
         rc, out, err = self.run(["sudo", "-n"] + list(argv), timeout)
         if rc != 0 and ("password" in err or "a terminal is required" in err or err.startswith("sudo:")):
             raise NeedSudo("需要 sudo: %s" % " ".join(argv))
@@ -602,9 +628,9 @@ def check_user_file(host, p, a):
         return FAIL, "%s 不存在" % path
     if a.get("executable") and not (st.st_mode & 0o111):
         return FAIL, "%s 不可执行" % path
-    if path.startswith("/usr/local/") and (host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022):
-        # A root daemon must never run a file someone other than root can rewrite.
-        return FAIL, "%s 由 root 守护执行，必须 root 持有、他人不可写、不是符号链接（uid=%s mode=%o）" % (path, st.st_uid, st.st_mode & 0o777)
+    if a.get("root_owned") and (host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022):
+        # A root daemon must never run a file someone other than root can rewrite — wherever the file lives.
+        return FAIL, "%s 由 root 守护执行，必须 root 持有、他人不可写、不是符号链接（uid=%s mode=%o）；旧守护请双击 installers/迁移IPv6守护.command" % (path, st.st_uid, st.st_mode & 0o777)
     return PASS, path
 
 
@@ -703,6 +729,9 @@ def check_manual(host, p, a):
 
 
 def check_claude_wall(host, p, a):
+    if is_root():
+        # 提权对账 runs this file as root: never execute a user-owned script as root. The user-mode run covers S8.
+        return UNKNOWN, "root 模式不执行用户脚本；以用户身份 python3 scripts/mirror_check.py --only tool.claude_wall 对账"
     path = expand(host, a["path"])
     st = host.lstat(path)
     if st is None or not (st.st_mode & 0o111):
@@ -819,7 +848,7 @@ def run_component(host, params, comp, network=True):
         try:
             status, evidence = fn(host, params, comp.get("args") or {})
         except NeedSudo as exc:
-            status, evidence = UNKNOWN, "%s（用 sudo 重跑：sudo python3 scripts/mirror_check.py --only %s）" % (exc, comp["id"])
+            status, evidence = UNKNOWN, "%s（需要 sudo：让用户双击 installers/提权对账.command，AI 不自己 sudo）" % exc
         except HostError as exc:
             status, evidence = UNKNOWN, str(exc)
     item = {"id": comp["id"], "layer": comp["layer"], "title": comp["title"],
@@ -863,7 +892,7 @@ def apply_overrides(params, overrides):
         if key not in params:
             raise ValueError("未知参数 %s" % key)
         if isinstance(params[key], list):
-            params[key] = [v for v in value.split(",") if v]
+            params[key] = [v.strip() for v in value.split(",") if v.strip()]
         elif isinstance(params[key], int) and not isinstance(params[key], bool):
             params[key] = int(value)
         else:

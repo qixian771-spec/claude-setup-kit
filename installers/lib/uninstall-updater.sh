@@ -2,7 +2,7 @@
 set -eu
 . "$(dirname "$0")/common.sh"; need_root; need_build "${1:-}"
 bootout_if_loaded local.claude-address-update
-rm -f /Library/LaunchDaemons/local.claude-address-update.plist /etc/sudoers.d/claude-mac-env-mirror
+rm -f /Library/LaunchDaemons/local.claude-address-update.plist /etc/sudoers.d/claude-mac-env-mirror /usr/local/libexec/claude-pf-helper
 rm -rf "/Library/Application Support/ClaudeDirectWallUpdater"
 state="$MIRROR_HOME/Library/Application Support/ClaudeDirectWallUpdater"
 # Keep the logs but move them aside: the installer refuses to overwrite this directory, so leaving it in place
