@@ -71,6 +71,53 @@ class DecideTests(unittest.TestCase):
         self.assertEqual(out["step"], "S2")
         self.assertIn("sudo", out["note"])
 
+    def test_sudo_only_unknowns_send_the_user_to_the_elevated_readonly_check(self):
+        # A fresh Mac without passwordless sudo: every PF item is ❓ "需要 sudo". The AI must not sudo itself and
+        # must not treat ❓ as missing; next_step points at 提权对账.command and reads its JSON back.
+        r = result()
+        for i in r["items"]:
+            if i["id"] in ("pf.enabled", "pf.010"):
+                i["status"] = "UNKNOWN"; i["evidence"] = "需要 sudo: pfctl -si（用 sudo 重跑：…）"
+        out = ns.decide(MANIFEST, r)
+        self.assertEqual(out["step"], "S2")
+        self.assertEqual(out["installer"], "installers/提权对账.command")
+        self.assertIn("--input installers/logs/mirror-sudo-latest.json", out["then"])
+        self.assertIsNone(out["ai_action"])
+        text = ns.render(out)
+        self.assertIn("提权对账.command", text)
+        self.assertNotIn("安装Claude直连墙", text)
+        # Mixed (a real ❌ plus a sudo ❓) keeps the installer but still says not to sudo.
+        r2 = result({"pf.010": "FAIL"})
+        for i in r2["items"]:
+            if i["id"] == "pf.enabled":
+                i["status"] = "UNKNOWN"; i["evidence"] = "需要 sudo: pfctl -si"
+        out2 = ns.decide(MANIFEST, r2)
+        self.assertEqual(out2["installer"], "installers/安装Claude直连墙.command")
+        self.assertIn("提权对账.command", out2["note"])
+
+    def test_skip_steps_are_marked_and_cascade(self):
+        # The user declined S4: S4 and everything that requires it (S6, S8) are skipped, listed, and the flow
+        # still reaches the end instead of parking on S4 forever.
+        r = result({"pf.020": "FAIL", "loader.020": "FAIL", "daemon.020": "FAIL", "loader.watch": "FAIL", "tool.claude_wall": "FAIL"})
+        r["params"] = {"skip_steps": ["S4"]}
+        out = ns.decide(MANIFEST, r)
+        self.assertEqual(out["state"], "all_passed")
+        self.assertEqual(set(out["skipped"]), {"S4", "S6", "S8"})
+        self.assertIn("用户未授权", out["skipped"]["S4"])
+        self.assertIn("S4", out["skipped"]["S6"])
+        text = ns.render(out)
+        self.assertIn("未授权跳过", text)
+        self.assertIn("S8", text)
+        r["params"] = {"skip_steps": ["S99"]}
+        with self.assertRaises(ValueError):
+            ns.decide(MANIFEST, r)
+
+    def test_text_output_prints_each_failing_components_next(self):
+        out = ns.decide(MANIFEST, result({"daemon.ipv6": "FAIL"}))
+        text = ns.render(out)
+        self.assertIn("下一步: n-daemon.ipv6", text)
+        self.assertIn("ls /Library/LaunchDaemons", out["ai_action"])
+
     def test_precheck_failure_is_called_out(self):
         out = ns.decide(MANIFEST, result({"pf.020": "FAIL", "net.tun_iface": "FAIL"}))
         self.assertEqual(out["step"], "S1")  # TUN belongs to S1, which must pass before S4

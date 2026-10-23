@@ -1,4 +1,6 @@
 # claude-mac-env-mirror: let the desktop user run the Claude address updater and
 # claude-wall without a password. Only these commands; the updater never needs more.
 # Installed by installers/lib/install-updater.sh after `visudo -cf` succeeds.
-{{USER}} ALL=(root) NOPASSWD: /sbin/pfctl, /usr/bin/install -o root -g wheel -m 600 /etc/pf.anchors/local.claude-direct-wall *, /usr/bin/install -o root -g wheel -m 644 * /etc/pf.anchors/*, /bin/mv -f * /etc/pf.anchors/local.claude-direct-wall, /bin/mkdir -m 700 *, /bin/rmdir *, /usr/bin/test -f /var/db/NetGuardWatch/last, /bin/cat /var/db/NetGuardWatch/last, /usr/bin/awk * /var/db/NetGuardWatch/history.log
+# Every destination is pinned: a sudoers "*" also matches "/", so "/etc/pf.anchors/*" would have allowed writing
+# /etc/pf.anchors/../sudoers.d/x, and "awk * file" would have run any awk program (system()) as root.
+{{USER}} ALL=(root) NOPASSWD: /sbin/pfctl, /usr/bin/install -o root -g wheel -m 600 /etc/pf.anchors/local.claude-direct-wall /var/db/ClaudeDirectWall/rules-before-*.pf, /usr/bin/install -o root -g wheel -m 644 * /etc/pf.anchors/local.claude-direct-wall.pending-*, /bin/mv -f /etc/pf.anchors/local.claude-direct-wall.pending-* /etc/pf.anchors/local.claude-direct-wall, /bin/mkdir -m 700 /var/run/claude-direct-wall/update.lock, /bin/rmdir /var/run/claude-direct-wall/update.lock, /usr/bin/test -f /var/db/NetGuardWatch/last, /bin/cat /var/db/NetGuardWatch/last, /bin/cat /var/db/NetGuardWatch/history.log, /usr/bin/profiles -P

@@ -147,6 +147,7 @@ def baseline_stats():
         "/Applications/Google Chrome.app": Stat(0, 0o40755),
         "/Library/Managed Preferences/com.google.Chrome.plist": Stat(0, 0o100644),
         HOME + "/.local/bin/ipv6-guard.sh": Stat(501, 0o100755),
+        "/usr/local/libexec/ipv6-guard.sh": Stat(0, 0o100755),
         HOME + "/.local/bin/claude-wall": Stat(501, 0o100755),
     }
     for label in ("local.claude-direct-wall", "local.claude-net-wall", "local.leak-guard",
@@ -706,6 +707,33 @@ class SystemTests(unittest.TestCase):
         host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Shanghai\n", "")
         _, items, _ = run_json(host, "--only", "sys.timezone")
         self.assertEqual(items["sys.timezone"]["status"], mc.FAIL)
+
+    def test_timezone_of_a_non_chinese_asian_exit_is_fine(self):
+        # Tokyo/Singapore/Seoul nodes are legitimate exits; only mainland China / Hong Kong / Macau are rejected.
+        host = FakeHost()
+        host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Tokyo\n", "")
+        _, items, _ = run_json(host, "--only", "sys.timezone")
+        self.assertEqual(items["sys.timezone"]["status"], mc.PASS)
+        host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Hong_Kong\n", "")
+        _, items, _ = run_json(host, "--only", "sys.timezone")
+        self.assertEqual(items["sys.timezone"]["status"], mc.FAIL)
+
+    def test_chrome_in_user_applications_is_checked_not_skipped(self):
+        host = FakeHost()
+        del host.stats["/Applications/Google Chrome.app"]
+        host.stats[HOME + "/Applications/Google Chrome.app"] = Stat(501, 0o40755)
+        _, items, _ = run_json(host, "--only", "chrome.policy")
+        self.assertEqual(items["chrome.policy"]["status"], mc.PASS)
+
+    def test_ipv6_guard_script_must_be_root_owned_under_usr_local(self):
+        host = FakeHost()
+        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(501, 0o100755)
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        self.assertIn("root 持有", items["ipv6.script"]["evidence"])
+        # The reference Mac points the parameter at its older user-level script, which is accepted as is.
+        _, items, _ = run_json(host, "--only", "ipv6.script", "--param", "ipv6_guard_script=~/.local/bin/ipv6-guard.sh")
+        self.assertEqual(items["ipv6.script"]["status"], mc.PASS)
 
     def test_language_is_info_either_way(self):
         host = FakeHost()

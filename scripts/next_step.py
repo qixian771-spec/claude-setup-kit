@@ -75,21 +75,35 @@ def step_state(step, status):
 def decide(manifest, result):
     status = {i["id"]: i["status"] for i in result["items"]}
     evidence = {i["id"]: i for i in result["items"]}
-    states = {}
+    # skip_steps (mirror.params.json): steps the user declined. A step that requires a skipped step is skipped
+    # too, and all of them are listed at the end so the delivery report names what was left out.
+    skips = set((result.get("params") or {}).get("skip_steps") or [])
+    unknown = skips - {s["id"] for s in manifest["steps"]}
+    if unknown:
+        raise ValueError("skip_steps 里有不存在的步骤: %s" % sorted(unknown))
+    states, skipped = {}, {}
     for step in manifest["steps"]:
         state, failing = step_state(step, status)
-        if not step.get("components") and any(states.get(r) != "passed" for r in step.get("requires", [])):
+        if not step.get("components") and any(states.get(r) not in ("passed", "skipped") for r in step.get("requires", [])):
             state = "pending"
+        via_skip = [r for r in step.get("requires", []) if states.get(r) == "skipped"]
+        if state != "passed" and (step["id"] in skips or via_skip):
+            state = "skipped"
+            skipped[step["id"]] = "用户未授权" if step["id"] in skips else "前置 %s 被跳过" % "、".join(via_skip)
         states[step["id"]] = state
         if state == "pending":
-            blockers = [r for r in step.get("requires", []) if states.get(r) != "passed"]
+            blockers = [r for r in step.get("requires", []) if states.get(r) not in ("passed", "skipped")]
             if blockers:
                 # Do the earliest unmet prerequisite first; it is always an earlier step.
                 first = next(s for s in manifest["steps"] if s["id"] == blockers[0])
-                return build(first, status, evidence, states, via=step["id"])
-            return build(step, status, evidence, states)
-    return {"step": None, "state": "all_passed", "exit": 0,
-            "ai_action": ("py -3 scripts\\mirror_check.py" if platform_key() == "win32" else "python3 scripts/mirror_check.py") + "（贴全量输出）",
+                out = build(first, status, evidence, states, via=step["id"])
+                out["skipped"] = skipped
+                return out
+            out = build(step, status, evidence, states)
+            out["skipped"] = skipped
+            return out
+    return {"step": None, "state": "all_passed", "exit": 0, "skipped": skipped,
+            "ai_action": ("py -3 scripts/mirror_check.py" if platform_key() == "win32" else "python3 scripts/mirror_check.py") + "（贴全量输出）",
             "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
             "say": "清单全部通过。最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。",
             "doc": "references/ippure-acceptance.md"}
@@ -109,10 +123,25 @@ def build(step, status, evidence, states, via=None):
            "verify": "python3 scripts/mirror_check.py --only %s" % ids if ids else "python3 scripts/mirror_check.py",
            "then": "python3 scripts/next_step.py"}
     if platform_key() == "win32":
-        out["verify"] = out["verify"].replace("python3 scripts/", "py -3 scripts\\")
-        out["then"] = out["then"].replace("python3 scripts/", "py -3 scripts\\")
+        # Forward slashes on purpose: PowerShell, cmd and Git Bash all accept them, while "scripts\x.py" loses
+        # its backslash in Git Bash (the shell an AI tool usually gets on Windows).
+        out["verify"] = out["verify"].replace("python3 scripts/", "py -3 scripts/")
+        out["then"] = out["then"].replace("python3 scripts/", "py -3 scripts/")
+    sudo_only = bool(failing) and all(f["status"] == UNKNOWN and "sudo" in f["evidence"] for f in failing)
+    if sudo_only and platform_key() != "win32":
+        # Nothing here is known to be missing: the read-only check itself needs root (pfctl / profiles -P). The AI
+        # never runs sudo; the user double-clicks the read-only elevated check and we read its JSON back.
+        out.update({
+            "installer": "installers/提权对账.command", "log": "mirror-sudo", "ai_action": None,
+            "user_action": "双击 installers/提权对账.command（只读对账，要开机密码，什么都不装）",
+            "say": "这一步我查不到结果，因为查看防火墙和描述文件需要管理员权限。双击“提权对账.command”，输一次开机密码，它只是看一眼、什么都不装。",
+            "note": "这一步的 ❓ 全是因为对账需要 sudo，不代表没装；AI 不自己 sudo，等用户双击后读 installers/logs/mirror-sudo-latest.json",
+            "verify": "（提权对账.command 已把结果写到 installers/logs/mirror-sudo-latest.json）",
+            "then": "python3 scripts/next_step.py --input installers/logs/mirror-sudo-latest.json",
+        })
+        return out
     if sudo_needed:
-        out["note"] = "有 ❓ 是因为需要 sudo：先 `sudo python3 scripts/mirror_check.py --only %s` 再判断，不要当作 ❌ 去重装" % ids
+        out["note"] = "有 ❓ 是因为需要 sudo：让用户双击 installers/提权对账.command，然后 `python3 scripts/next_step.py --input installers/logs/mirror-sudo-latest.json`；不要当作 ❌ 去重装，AI 不自己 sudo"
     if any(p["status"] != PASS for p in precheck):
         out["note"] = (out.get("note", "") + "；" if out.get("note") else "") + "前置检查未过（%s），先回去处理，否则安装器会拒装" % ", ".join(p["id"] for p in precheck if p["status"] != PASS)
     return out
@@ -121,30 +150,38 @@ def build(step, status, evidence, states, via=None):
 MARK = {PASS: "✅", FAIL: "❌", UNKNOWN: "❓", INFO: "ℹ️", MANUAL: "👉"}
 
 
-def params_hint(manifest_path):
+def params_hint(manifest_path, overrides=()):
     local = Path(manifest_path).parent / "mirror.params.json"
-    if local.exists():
+    if local.exists() or overrides:
         return None
     return ("提醒: 仓库根目录没有 mirror.params.json，对账用的是参考机默认参数（出口节点 %s）。"
-            "先按 START.md 第 0 步写入本机的 exit_node 等参数，再看下面的结果。" % json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"])
+            "先按 START.md 第 0 步写入本机参数（exit_node；Mac 已有 IPv6 守护的还要 ipv6_guard_label / ipv6_guard_script；"
+            "插网线的 Mac 和所有 Windows 要 network_services；用户不做的步骤写 skip_steps），再看下面的结果。"
+            % json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"])
 
 
 def render(out):
+    skipped_line = ("未授权跳过（交付时照抄）: " + "；".join("%s（%s）" % kv for kv in out["skipped"].items())) if out.get("skipped") else None
     if out["state"] == "all_passed":
-        return "\n".join(["# 全部步骤通过 → 做 ippure 验收", "AI 先运行: " + out["ai_action"], "让用户做: " + out["user_action"],
-                          "对用户说: “%s”" % out["say"], "记录格式: " + out["doc"]])
+        head = ["# 全部步骤通过 → 做 ippure 验收"] + ([skipped_line] if skipped_line else [])
+        return "\n".join(head + ["AI 先运行: " + out["ai_action"], "让用户做: " + out["user_action"],
+                                 "对用户说: “%s”" % out["say"], "记录格式: " + out["doc"]])
     lines = ["# 现在做：%s %s" % (out["step"], out["title"])]
     if out.get("via"):
         lines.append("（%s 的前置；先完成这一步）" % out["via"])
     lines.append("未通过:")
     for f in out["failing"]:
         lines.append("  %s %-16s %s" % (MARK.get(f["status"], "?"), f["id"], f["evidence"]))
+        if f.get("next"):
+            lines.append("      下一步: %s" % f["next"])
     if out["prerequisites"]:
         lines.append("前置步骤: " + "  ".join("%s=%s" % (k, "✅" if v == "passed" else "❌") for k, v in out["prerequisites"].items()))
     if out["precheck"]:
         lines.append("前置检查: " + "  ".join("%s %s" % (MARK.get(p["status"], "?"), p["id"]) for p in out["precheck"]))
     if out.get("note"):
         lines.append("注意: " + out["note"])
+    if skipped_line:
+        lines.append(skipped_line)
     if out.get("ai_action"):
         lines.append("AI 先做: " + out["ai_action"])
     if out.get("installer"):
@@ -191,7 +228,7 @@ def main(argv=None):
         # KeyError/TypeError: manifest or input JSON missing the expected shape
         print("[ERROR] %s" % exc, file=sys.stderr)
         return 2
-    hint = params_hint(args.manifest)
+    hint = params_hint(args.manifest, args.param)
     if hint:
         out["params_hint"] = hint
     if args.json:

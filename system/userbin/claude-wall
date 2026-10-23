@@ -229,9 +229,9 @@ cmd_watch() {
 	check_watch || rc=$?
 	since=$(date -u -v-24H '+%Y-%m-%dT%H:%M:%SZ')
 	echo "24 小时内异常次数（$since 起）:"
-	$SUDO awk -F'\t' -v since="$since" '$1 >= since && $2 != "OK" && $2 != "" {n[$2]++} END {for (k in n) print "  " k ": " n[k]; if (!length(n)) print "  无"}' "$WATCH_DIR/history.log"
+	$SUDO cat "$WATCH_DIR/history.log" | /usr/bin/awk -F'\t' -v since="$since" '$1 >= since && $2 != "OK" && $2 != "" {n[$2]++} END {for (k in n) print "  " k ": " n[k]; if (!length(n)) print "  无"}'
 	echo "最近 5 条异常记录:"
-	$SUDO awk -F'\t' '$2 != "OK"' "$WATCH_DIR/history.log" | tail -5 | /usr/bin/sed 's/^/  /'
+	$SUDO cat "$WATCH_DIR/history.log" | /usr/bin/awk -F'\t' '$2 != "OK"' | tail -5 | /usr/bin/sed 's/^/  /'
 	exit "$rc"
 }
 

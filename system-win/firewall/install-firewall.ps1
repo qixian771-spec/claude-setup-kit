@@ -9,6 +9,13 @@ Invoke-Logged $Log {
     $P = Read-Params $Build
     Assert-Physical $P
     $iface = $P['WIFI_IFACE']; $sid = $P['USER_SID']
+    # The user-public rules key on USER_SID. When UAC was answered with another administrator's password the
+    # elevated process renders as that admin, so refuse unless the SID is the desktop (console) user's.
+    $console = (Get-CimInstance Win32_ComputerSystem).UserName
+    if ($console) {
+        $csid = (New-Object System.Security.Principal.NTAccount($console)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+        if ($csid -ne $sid) { throw "USER_SID $sid 不是桌面登录用户 $console（$csid）：UAC 用了另一个管理员账号，渲染拿到的是它的 SID。请在桌面用户自己的账号下双击 安装防火墙规则.cmd（它在提权前渲染），不要用一键安装" }
+    }
 
     $names = 'net-wall v4', 'net-wall v6', 'leak-guard dns udp', 'leak-guard dns tcp', 'leak-guard stun udp', 'leak-guard stun tcp', 'leak-guard user-public tcp', 'leak-guard user-public udp'
     Refuse-Existing $names

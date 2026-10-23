@@ -1,6 +1,6 @@
 # 执行手册（Windows 10/11）：把一台 Windows 配成参考机的等价物
 
-与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts\mirror_check.py --only <id>` 的输出原文；`py -3 scripts\next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（27 个），`mirror_check` 在 Windows 上自动只跑这些。
+与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts/mirror_check.py --only <id>` 的输出原文；`py -3 scripts/next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（27 个），`mirror_check` 在 Windows 上自动只跑这些。
 
 执行主体是 AI；👤 的动作由用户做（双击 `.cmd`/`.reg`、UAC 点"是"、在 Clash Verge / 设置里点、截图）。所有 `.cmd` 都把输出写到 `installers\logs\<名字>-<随机>.log`，最后一行 `EXIT=`。
 
@@ -37,7 +37,7 @@ foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShor
 | 手写进 `profiles.yaml` 的配置卡能选中但不生效 | Clash Verge 不认外部注册的卡 | 一律用界面「新建 → 本地」导入 |
 | 启动 90 秒后满屏报错退出，日志 `can't download ASN.mmdb` | `IP-ASN` 规则要先联网下载数据库，没代理就超时；还会留下半截坏库 | 模板已删这条；旧配置删掉它并挪走 `ASN.mmdb` |
 | 丽萨（VLESS-REALITY）测速报错，其他节点正常 | 节点缺 `support-x25519mlkem768: true` | 模板已带 |
-| 关了 Clash Verge 窗口再开就起不来 / 卡在验证 | 强杀 `clash-verge.exe` 会留下孤儿 `verge-mihomo.exe`；服务模式的服务也会停 | 不要强杀；必须重来时停掉全部 `clash-verge*`/`verge-mihomo` 进程，再 `Start-Service clash_verge_service`，最后让用户自己双击打开 |
+| 关了 Clash Verge 窗口再开就起不来 / 卡在验证 | 强杀 `clash-verge.exe` 会留下孤儿 `verge-mihomo.exe`；服务模式的服务也会停 | AI 不执行。告诉用户：只有 Clash 已经起不来时，由用户自己在任务管理器里结束 `clash-verge*` 和 `verge-mihomo` 两个进程，在『服务』里启动 `clash_verge_service`，再双击打开 Clash Verge |
 | `.cmd` 里 UAC 之后什么都没执行 | 嵌套 `-Command "…\"…\"…"` 在 cmd 里被截断 | 已改为 `-File` 调脚本、脚本自提权、自写日志 |
 | `reg import 'Chrome策略.reg'` 报打不开文件 | reg.exe 不认中文路径 | 一键安装直接写注册表值；单独双击 .reg 走的是 Explorer 不是 reg.exe，理论上可用但**未实测** |
 | `git clone` 报 `Connection was reset` / `Failed to connect to github.com` | 没有代理时国内连不上 GitHub（实测关 TUN 后两次失败、curl 15 秒超时） | 先在 Clash Verge 开系统代理再克隆；没有任何代理的机器让用户在别的设备 Download ZIP 拷过来 |
@@ -47,25 +47,25 @@ foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShor
 
 ## G0 约束表
 
-已知限制（未实测）：渲染时的 `USER_SID` 取自当前登录用户；如果日常用的是标准账户、UAC 弹的是另一个管理员账号的密码，一键安装在提权后渲染体检工具时拿到的仍是登录用户的 SID（渲染读的是控制台用户），但这种双账号场景没有在实机上验证过，交付时写明。
+双账号机器（日常用标准账户、UAC 输另一个管理员的密码）：一键安装在**提权之后**渲染，拿到的 `USER_SID` 是那个管理员的，user-public 规则会套错人。`install-firewall.ps1` 现在会比对桌面登录用户的 SID，不符就拒装并提示——这种机器请在桌面用户自己的账号下双击 `安装防火墙规则.cmd`（它在提权前渲染）。未在双账号实机验证，交付时写明。
 
 同 macOS 手册 G0，外加：Clash Verge 必须用**服务模式**（否则核心以用户身份运行，会被 user-public 规则拦住）；网卡别名（`网络连接` 里显示的名字，如 `以太网` / `WLAN`）写进 `mirror.params.json` 的 `network_services`；Python 用 `py -3`（3.9+），仓库放在没有空格和中文的路径更省事（有也能跑）。
 
 ## G1 摸底（只读）
 
 ```
-py -3 scripts\mirror_check.py --no-network
+py -3 scripts/mirror_check.py --no-network
 ```
-写 `mirror.params.json`（例：`{"exit_node": "<节点名>", "network_services": ["以太网"]}`），再 `py -3 scripts\render.py --component win-firewall --print-params` 核对 USER / USER_SID / WIFI_IFACE / TUN / TIMEZONE_WIN。
+写 `mirror.params.json`（例：`{"exit_node": "<节点名>", "network_services": ["以太网"]}`），再 `py -3 scripts/render.py --component win-firewall --print-params` 核对 USER / USER_SID / WIFI_IFACE / TUN / TIMEZONE_WIN。
 
 ## S1 Clash Verge（Windows）
 
 组件：`clash.core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录：实测 Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器的 DNS，真实路径由 TUN 劫持 53 保证，见 `dns.local53`）。
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
-2. AI：`py -3 scripts\render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
+2. AI：`py -3 scripts/render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
 3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；点这张卡设为当前（脚本 `clash-profile.script.js` **可选**，模板已带同样的 DNS 与 STUN 规则）；设置里系统代理开、DNS 覆写关；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
-4. 对账：`py -3 scripts\mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
+4. 对账：`py -3 scripts/mirror_check.py --only clash.core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
 
 控制通道：Windows 版 Clash Verge 在命名管道 `\\.\pipe\verge-mihomo`（`params_win.clash_api`）；若用户另设了 `external-controller`，用 `--param clash_api=http://127.0.0.1:<端口>` 并设环境变量 `MIHOMO_SECRET`。TUN 适配器默认名 `Meta`（`params_win.tun_device`）。
 
@@ -106,11 +106,11 @@ py -3 scripts\mirror_check.py --no-network
 
 ## S8 实测
 
-`py -3 scripts\mirror_check.py --only net.exit_ip,dns.upstream`（curl.exe + nslookup，不碰 Anthropic）。WebRTC 见 S5。
+`py -3 scripts/mirror_check.py --only net.exit_ip,dns.upstream`（curl.exe + nslookup，不碰 Anthropic）。WebRTC 见 S5。
 
 ## S9 交付
 
-`py -3 scripts\mirror_check.py` 全量：`合计` 行 ❌=0 ❓=0（ℹ️ 2：语言、Windows 的系统 DNS 记录项；👉 1）。再 👤 用 Chrome/Edge 打开 <https://ippure.com/claude.html> 截两张图，按 [ippure 验收](ippure-acceptance.md) 记四项。交付内容同 macOS 手册 S12。
+`py -3 scripts/mirror_check.py` 全量：`合计` 行 ❌=0 ❓=0（ℹ️ 2：语言、Windows 的系统 DNS 记录项；👉 1）。再 👤 用 Chrome/Edge 打开 <https://ippure.com/claude.html> 截两张图，按 [ippure 验收](ippure-acceptance.md) 记四项。交付内容同 macOS 手册 S12。
 
 ## 退出码
 
@@ -126,7 +126,7 @@ py -3 scripts\mirror_check.py --no-network
 | 没装 Edge | `reg.edge` ℹ️，跳过 Edge策略.reg | 为了 ✅ 去装 Edge |
 | 用户想自己 `reg import` | 可以，但对账要看 `chrome.policy` 的注册表值 | 接受"我改了"没有对账 |
 | 弱模型把 macOS 的 `.command` 发给 Windows 用户 | 不接受：Windows 只用 `installers\win\` 下的文件 | — |
-| 弱模型在 Windows 上用 `python3 scripts/...` 报错 | 改 `py -3 scripts\...` | 让用户装别的 Python |
+| 弱模型在 Windows 上用 `python3 scripts/...` 报错，或 `py -3 scripts\x.py` 在 Git Bash 里找不到文件 | 改 `py -3 scripts/...`（正斜杠） | 让用户装别的 Python |
 | 控制台中文乱码 | `.cmd` 已 `chcp 65001`；脚本自己把 stdout 设为 UTF-8 | 把输出改成英文凑合 |
 | `dns.system` 显示 ℹ️ | 正常：Windows 的受管 DNS 值只记录，真实路径看 `dns.local53` | 当 ❌ 去改 DNS |
 | 用户这台是游戏机（LOL/PUBG、加速器） | 让用户二选一并记下来：**(a) 用 Claude 时**一键安装 + 开 TUN，**打游戏前**一键撤回 + 关 TUN（每次往返约 1 分钟，防护最全）；**(b) 不想来回切**就不装防火墙规则，只留 Clash 规则模式 + 浏览器策略 + 时区（没有物理网卡墙，`wf.*` 永远 ❌，交付时写明） | 长期装 user-public 规则又开着加速器（会拦游戏和加速器的直连） |

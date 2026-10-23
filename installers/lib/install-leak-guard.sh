@@ -14,7 +14,7 @@ install -o root -g wheel -m 755 "$loader" /usr/local/libexec/leak-guard-loader
 install -o root -g wheel -m 644 "$plist" /Library/LaunchDaemons/local.leak-guard.plist
 mkdir -p /var/db/LocalLeakGuard; chmod 700 /var/db/LocalLeakGuard
 pf_conf_add "$anchor" /etc/pf.anchors/local.leak-guard
-/usr/local/libexec/leak-guard-loader
+/usr/local/libexec/leak-guard-loader || { rc=$?; echo "装载器 /usr/local/libexec/leak-guard-loader 退出码 ${rc}（含义见 system/libexec 里它的 exit 行）；文件已装、未回滚，先对账" >&2; exit 74; }
 launchctl bootstrap system /Library/LaunchDaemons/local.leak-guard.plist
 has_label "$anchor" leak-guard-dns && has_label "$anchor" leak-guard-user-public || { echo "装载后规则不在，失败" >&2; exit 74; }
 echo "[OK] 防泄露墙（锚点 020）已装载：物理 53/853/STUN 封锁，UID $MIRROR_UID 的公网只准走 ${tun}。"

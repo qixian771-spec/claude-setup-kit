@@ -596,12 +596,15 @@ def check_root_file(host, p, a):
 
 
 def check_user_file(host, p, a):
-    path = expand(host, a["path"])
+    path = expand(host, p[a["path_param"]] if "path_param" in a else a["path"])
     st = host.lstat(path)
     if st is None:
         return FAIL, "%s 不存在" % path
     if a.get("executable") and not (st.st_mode & 0o111):
         return FAIL, "%s 不可执行" % path
+    if path.startswith("/usr/local/") and (host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022):
+        # A root daemon must never run a file someone other than root can rewrite.
+        return FAIL, "%s 由 root 守护执行，必须 root 持有、他人不可写、不是符号链接（uid=%s mode=%o）" % (path, st.st_uid, st.st_mode & 0o777)
     return PASS, path
 
 
@@ -669,8 +672,9 @@ def check_updater_fresh(host, p, a):
 
 
 def check_chrome_policy(host, p, a):
-    if host.lstat(p["chrome_app"]) is None:
-        return INFO, "未安装 Chrome（%s），跳过" % p["chrome_app"]
+    apps = [p["chrome_app"], str(host.home() / "Applications" / "Google Chrome.app")]  # per-user install too
+    if all(host.lstat(x) is None for x in apps):
+        return INFO, "未安装 Chrome（找过 %s），跳过" % "、".join(apps)
     want = p["chrome_policy"]
     user = host.console_name()
     for path in ("/Library/Managed Preferences/com.google.Chrome.plist",
@@ -753,8 +757,8 @@ def check_dns_upstream(host, p, a):
 def check_timezone(host, p, a):
     rc, out, _ = host.run(["readlink", "/etc/localtime"])
     zone = out.strip().split("zoneinfo/")[-1] if "zoneinfo/" in out else out.strip()
-    if any(zone.startswith(x) for x in p["timezone_forbid_prefix"]):
-        return FAIL, "时区 %s" % zone
+    if zone in p["timezone_forbid"]:
+        return FAIL, "时区 %s 在禁止列表（中国大陆/港澳；选 Claude 出口所在国家的时区）" % zone
     return PASS, "时区 %s" % zone
 
 

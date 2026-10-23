@@ -73,9 +73,19 @@
     },
     "watch_max_age_s": 180,
     "updater_max_age_h": 6,
-    "timezone_forbid_prefix": [
-      "Asia/"
+    "timezone_forbid": [
+      "Asia/Shanghai",
+      "Asia/Chongqing",
+      "Asia/Harbin",
+      "Asia/Urumqi",
+      "Asia/Kashgar",
+      "Asia/Hong_Kong",
+      "Asia/Macau",
+      "Asia/Macao"
     ],
+    "timezone_note": "Pick the timezone of the country the Claude exit node is in; only mainland China / Hong Kong / Macau are rejected, so Tokyo/Singapore/Seoul nodes are fine.",
+    "skip_steps": [],
+    "skip_steps_note": "Step ids (S4, S7 ...) the user declined; next_step marks them and everything that requires them as skipped and lists them for the delivery report.",
     "chrome_app": "/Applications/Google Chrome.app",
     "chrome_profile_identifier": "local.claude-mac-env-mirror.chrome",
     "chrome_policy": {
@@ -83,6 +93,8 @@
       "DnsOverHttpsMode": "off"
     },
     "ipv6_guard_label": "local.ipv6-guard",
+    "ipv6_guard_script": "/usr/local/libexec/ipv6-guard.sh",
+    "ipv6_guard_script_note": "Root-owned, root-only-writable; the reference Mac's older guard lives in ~/.local/bin/ipv6-guard.sh and sets this in mirror.params.json.",
     "ipv6_guard_note": "The reference Mac uses the older label com.niuniu.ipv6-guard; set ipv6_guard_label in mirror.params.json there.",
     "chrome_policy_key": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
     "edge_app": "/Applications/Microsoft Edge.app",
@@ -237,7 +249,7 @@
       "layer": "网络",
       "title": "系统 DNS 处于已知受管状态",
       "check": "system_dns",
-      "next": "只接受 params.system_dns_accept 里的值；其他值表示有人手工改过系统 DNS，先查原因再按手册 S3 处理。",
+      "next": "只接受 params.system_dns_accept 里的值；其他值表示有人手工改过系统 DNS，先查原因再按手册 S1 处理。",
       "platforms": [
         "darwin",
         "win32"
@@ -530,10 +542,10 @@
     {
       "id": "ipv6.script",
       "layer": "守护",
-      "title": "~/.local/bin/ipv6-guard.sh 存在可执行",
+      "title": "IPv6 守护脚本（params.ipv6_guard_script）存在、可执行、root 持有",
       "check": "user_file",
       "args": {
-        "path": "~/.local/bin/ipv6-guard.sh",
+        "path_param": "ipv6_guard_script",
         "executable": true
       },
       "next": "见 daemon.ipv6。",
@@ -546,7 +558,7 @@
       "layer": "浏览器",
       "title": "Chrome 管理策略：WebRTC 禁非代理 UDP、DoH 关",
       "check": "chrome_policy",
-      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 通用 → 设备管理 里安装（macOS 12 及更早在 系统偏好设置 → 描述文件）；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。 Windows：双击 installers\\win\\Chrome策略.reg 导入注册表策略。",
+      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 通用 → 设备管理 里安装（macOS 12 及更早在 系统偏好设置 → 描述文件）；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。",
       "platforms": [
         "darwin",
         "win32"
@@ -780,7 +792,7 @@
       "requires": [],
       "installer": null,
       "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A 建节点）",
-      "user_action": "Clash Verge → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式、系统代理开、DNS 覆写关；代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
+      "user_action": "安装 Clash Verge（macOS）→ 设置 → 服务模式 → 安装（TUN 需要）→ 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式、系统代理开、DNS 覆写关；代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
       "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件，你在 Clash Verge 里导入、开 TUN、选出口节点和 Google 用的节点。"
     },
     {
@@ -882,6 +894,7 @@
       "requires": [],
       "installer": "installers/安装IPv6守护.command",
       "log": "ipv6-guard",
+      "ai_action": "ls /Library/LaunchDaemons | grep -i ipv6 —— 有别的 label 的守护就把它的 label 和脚本路径写进 mirror.params.json 的 ipv6_guard_label / ipv6_guard_script，重新对账，不让用户装",
       "user_action": "双击 installers/安装IPv6守护.command",
       "say": "把 IPv6 关掉并守住，防止绕过代理。双击“安装IPv6守护.command”。"
     },
@@ -1001,7 +1014,7 @@
       ],
       "requires": [],
       "installer": null,
-      "ai_action": "py -3 scripts\\render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
+      "ai_action": "py -3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
       "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式、系统代理开、DNS 覆写关 → 代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
       "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置；你在 Clash Verge 里装服务模式、导入、开 TUN、选出口节点和 Google 用的节点。"
     },
@@ -1105,7 +1118,7 @@
         "S1"
       ],
       "installer": null,
-      "ai_action": "py -3 scripts\\mirror_check.py --only net.exit_ip,dns.upstream",
+      "ai_action": "py -3 scripts/mirror_check.py --only net.exit_ip,dns.upstream",
       "say": "我用公开的第三方检测点测一下出口和 DNS（不碰 Anthropic 的地址）。"
     },
     {
@@ -1123,7 +1136,7 @@
         "S8"
       ],
       "installer": null,
-      "ai_action": "py -3 scripts\\mirror_check.py（合计 ❌=0 ❓=0）",
+      "ai_action": "py -3 scripts/mirror_check.py（合计 ❌=0 ❓=0）",
       "user_action": "用 Chrome 或 Edge 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
       "say": "清单全部通过。最后请用浏览器打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。"
     }

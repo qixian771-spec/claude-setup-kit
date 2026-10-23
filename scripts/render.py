@@ -212,6 +212,17 @@ def render_component(name, values, out_dir):
     out_dir = Path(out_dir)
     if out_dir.exists():
         raise RenderError("输出目录已存在，不覆盖: %s" % out_dir)
+    try:
+        return _render_into(name, values, out_dir)
+    except RenderError:
+        # Leave nothing behind on failure, so the same --out can be retried after the parameters are fixed.
+        if out_dir.exists():
+            import shutil
+            shutil.rmtree(out_dir)
+        raise
+
+
+def _render_into(name, values, out_dir):
     written = []
     for rel in COMPONENTS[name]:
         src = ROOT / rel

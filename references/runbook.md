@@ -16,7 +16,7 @@
 | 出口分组名、出口节点名 | 用户说；默认 manifest `exit_group`=出口选择、`exit_node` 由用户定 | 停止：没有节点名就没法对账 `clash.exit` |
 | 网络服务名 | `networksetup -listallnetworkservices`，一般 `Wi-Fi` | 用 `--param network_services=<名>` |
 | 已装过什么 | G1 的对账表 | — |
-| 授权 | 用户同意装 PF 规则、LaunchDaemon、sudoers 最小规则、描述文件；同意 IPv6 关闭 | 未授权的组件跳过并在交付里列出 |
+| 授权 | 用户同意装 PF 规则、LaunchDaemon、sudoers 最小规则、描述文件；同意 IPv6 关闭 | 未授权的步骤写进 `mirror.params.json` 的 `skip_steps`（如 `["S4"]`），`next_step` 会跳过它和依赖它的步骤并在最后列出，交付时照抄 |
 | 硬约束 | 出口固定不切；不碰 Anthropic 地址；正在用 Claude 时不重载 Clash | 始终 |
 
 ## G1 摸底（只读）
@@ -46,7 +46,7 @@
 3. 👤 Clash Verge → 配置（订阅）→ 新建 → 类型 Local → 导入渲染的 yaml → 点这张卡设为当前。脚本 `clash-profile.script.js` **可选**：模板里已经有一模一样的 DNS 段和 STUN 拦截规则。**不要用手写 profiles.yaml 的方式注册配置卡**（实测 Clash Verge 能选中但不会用它的内容）。
 4. 👤 设置：开 TUN 模式、系统代理开、DNS 覆写关（脚本已写 DNS）；代理页把 `出口选择` 选到出口节点。
 4b. 👤 代理页把 `Google出口` 选成**主出口以外**的节点（参考机用韩国节点）。为什么：Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Google 走另一个节点，Claude 的出口不动，`storage.googleapis.com`/`fonts.*` 这些 Claude 要用的仍走主出口（规则顺序已在模板里排好）。
-5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
+5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
 
 读：十一项全 ✅。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；S1 配置阶段允许退出 Clash Verge（托盘里退出）删掉这几段再开——这是"不退出 Clash"硬规则唯一的例外，只在还没开始用 Claude 时做。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
 
@@ -119,7 +119,7 @@
 ## S10 系统设置
 
 组件：`sys.timezone`（必做）、`sys.language`（可选，ℹ️）。
-动作：👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选节点所在时区。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
+动作：👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（东京、新加坡、首尔都可以；只有中国大陆、香港、澳门被判 ❌）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
 对账：`--only sys.timezone,sys.language`。
 
 ## S11 实测
@@ -140,7 +140,7 @@
 | `mirror_check.py` | 全部 ✅（ℹ️/👉 不计） | 有 ❌ | 有 ❓（要 sudo / 工具缺 / 网络不可达 / `--no-network`） | — |
 | `render.py` | 渲染完成，首行是输出目录 | — | 参数或占位符错误（stderr `[ERROR]`） | — |
 | `next_step.py` | 全部步骤通过，去做 ippure | — | mirror_check 跑不了或 manifest 不一致 | 3 = 打印了待做的步 |
-| `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置不符（pf.conf 语法没过已恢复备份 / 前一道墙不在 / 卸载时守护 label 不符，日志写明是哪一样） · 74 装后验证失败 · 75 TUN 不在 |
+| `installers/lib/install-*.sh` | 装好并验证 | — | — | 64 用法 · 65 参数不对 · 70 不是 root · 71 缺渲染文件 · 72 已存在拒绝覆盖 · 73 前置不符（pf.conf 语法没过已恢复备份——但之前复制的文件还在，下次会 72 / 前一道墙不在 / 卸载时守护不是本套件的，日志写明是哪一样） · 74 装后验证失败或装载器失败（日志里有装载器自己的退出码） · 75 TUN 不在 |
 | `.command` 日志 `EXIT=` | 同上 | | | 2 = 渲染失败，什么都没装 |
 
 `[OK]` 出现过不代表后面没失败，看最后的 `EXIT=`。`.command` 日志里过滤掉了含 `ALTQ` 的行：那是 macOS `pfctl` 每次都打印的 "No ALTQ support in kernel" 噪音，不是错误；其他输出一行不漏。

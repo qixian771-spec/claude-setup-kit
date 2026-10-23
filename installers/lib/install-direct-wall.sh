@@ -12,7 +12,7 @@ install -o root -g wheel -m 755 "$loader" /usr/local/libexec/claude-direct-wall
 install -o root -g wheel -m 644 "$plist" /Library/LaunchDaemons/local.claude-direct-wall.plist
 mkdir -p /var/db/ClaudeDirectWall; chmod 700 /var/db/ClaudeDirectWall
 pf_conf_add "$anchor" /etc/pf.anchors/local.claude-direct-wall
-/usr/local/libexec/claude-direct-wall
+/usr/local/libexec/claude-direct-wall || { rc=$?; echo "装载器 /usr/local/libexec/claude-direct-wall 退出码 ${rc}（含义见 system/libexec 里它的 exit 行）；文件已装、未回滚，先对账" >&2; exit 74; }
 launchctl bootstrap system /Library/LaunchDaemons/local.claude-direct-wall.plist
 has_label "$anchor" claude-wall-ipv4 && has_label "$anchor" claude-wall-ipv6 || { echo "装载后规则不在，失败" >&2; exit 74; }
 echo "[OK] Claude 直连墙（锚点 010）已装载并设为开机装载。目标表："; pfctl -a "$anchor" -t claude_wall_targets -T show | sed 's/^/     /'

@@ -6,7 +6,7 @@
 	<string>{{IPV6_LABEL}}</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>{{HOME}}/.local/bin/ipv6-guard.sh</string>
+		<string>/usr/local/libexec/ipv6-guard.sh</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

@@ -134,6 +134,12 @@ class ComponentTests(RenderFixture):
         sudoers = (out / "updater/system/sudoers/claude-mac-env-mirror").read_text(encoding="utf-8")
         self.assertTrue(sudoers.rstrip().splitlines()[-1].startswith("tester ALL=(root) NOPASSWD:"))
         self.assertNotIn("NOPASSWD: ALL", sudoers)
+        rule = sudoers.rstrip().splitlines()[-1]
+        # A sudoers "*" also matches "/": no wildcard may reach outside the pinned paths, and no awk program as root.
+        self.assertNotIn("/etc/pf.anchors/*", rule)
+        self.assertNotIn("awk", rule)
+        self.assertNotIn("mkdir -m 700 *", rule)
+        self.assertIn("/usr/bin/profiles -P", rule)
         plist = (out / "ipv6-guard/system/LaunchDaemons/ipv6-guard.plist").read_text(encoding="utf-8")
         self.assertIn("<string>local.ipv6-guard</string>", plist)
         guard = (out / "ipv6-guard/system/userbin/ipv6-guard.sh").read_text(encoding="utf-8")
@@ -210,6 +216,12 @@ class ComponentTests(RenderFixture):
         self.assertIn("type: socks5", text3)
         self.assertEqual(text3.count("- 'v-node3_name'"), 2)
         self.assertNotIn("{{IF", text3)
+
+    def test_failed_render_leaves_no_output_directory(self):
+        out = self.root / "half"
+        with self.assertRaises(render.RenderError):
+            render.render_component("clash", self.values(), out)  # no node values
+        self.assertFalse(out.exists())
 
     def test_conditional_markers_must_balance(self):
         with self.assertRaises(render.RenderError):
