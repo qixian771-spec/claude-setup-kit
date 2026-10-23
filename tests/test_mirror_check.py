@@ -187,6 +187,8 @@ class FakeHost:
         self.calls, self.priv_calls = [], []
 
     def run(self, argv, timeout=20):
+        # On a Windows runner pathlib builds the home-relative arguments with "\\"; the fixture keys use "/".
+        argv = [self._norm(a) for a in argv]
         self.calls.append(list(argv))
         key = tuple(argv)
         if key not in self.cmds:
