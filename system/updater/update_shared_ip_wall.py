@@ -300,16 +300,15 @@ class SystemBackend:
     def persist(self, values):
         text = render_rules(values)
         original = RULES.read_bytes()
-        root('check', ANCHOR, input=text)
+        require(parse_rules(text) == values, 'Rendered rules do not round-trip')  # self-check of our own rendering
         require(RULES.read_bytes() == original, 'Concurrent rules change')
-        # The helper validates again, backs the live file up under /var/db/ClaudeDirectWall, stages next to it and
-        # renames atomically; we only ever hand it the rule text on stdin.
-        root('persist', input=text)
-        require(RULES.read_text() == text, 'Persistent readback mismatch (content)')
+        # The helper only accepts exact host addresses: it rewrites the table line of the live file itself, validates
+        # with pfctl -n, backs the old file up under /var/db/ClaudeDirectWall, stages next to it and renames atomically.
+        root('persist', *ordered(values))
         require(parse_rules(RULES.read_text()) == values, 'Persistent readback mismatch')
 
     def add(self, values):
-        root('table-add', ANCHOR, TABLE, *ordered(values))
+        root('table-add', *ordered(values))
 
     def kill_states(self, values):
         for ip in ordered(values):

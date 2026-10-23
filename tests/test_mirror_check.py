@@ -88,6 +88,15 @@ UPDATER_LOG = "\n".join([
     json.dumps({"report": "x", "status": "STOPPED_OLD_TARGETS_NOT_REMOVED", "new_candidates": []}),
     json.dumps({"status": "STOPPED_OLD_TARGETS_NOT_REMOVED", "finished_utc": "2026-10-22T22:30:13+00:00"}),
 ]) + "\n"
+IPV6_GUARD_PLIST = b"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>local.ipv6-guard</string>
+<key>ProgramArguments</key><array><string>/usr/local/libexec/ipv6-guard.sh</string></array>
+<key>StandardErrorPath</key><string>/var/log/ipv6-guard.err</string>
+<key>StandardOutPath</key><string>/var/log/ipv6-guard.out</string>
+</dict></plist>
+"""
 CHROME_POLICY = plistlib.dumps({"DnsOverHttpsMode": "off", "WebRtcIPHandling": "disable_non_proxied_udp"})
 
 
@@ -190,7 +199,8 @@ class FakeHost:
         self.files = {"/etc/pf.conf": PF_CONF,
                       HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml": RUNTIME_CONFIG,
                       HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml": BASE_CONFIG}
-        self.bytes = {"/Library/Managed Preferences/com.google.Chrome.plist": CHROME_POLICY}
+        self.bytes = {"/Library/Managed Preferences/com.google.Chrome.plist": CHROME_POLICY,
+                      "/Library/LaunchDaemons/local.ipv6-guard.plist": IPV6_GUARD_PLIST}
         self.links = set()
         self.sudo, self.macos, self.uid, self._now = sudo, macos, uid, now
         self.platform = "darwin" if macos else "linux"
@@ -725,19 +735,26 @@ class SystemTests(unittest.TestCase):
         _, items, _ = run_json(host, "--only", "chrome.policy")
         self.assertEqual(items["chrome.policy"]["status"], mc.PASS)
 
-    def test_ipv6_guard_script_must_be_root_owned_wherever_it_lives(self):
+    def test_ipv6_guard_program_is_read_from_the_plist_and_must_be_root_owned(self):
         host = FakeHost()
-        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(501, 0o100755)
         _, items, _ = run_json(host, "--only", "ipv6.script")
-        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
-        self.assertIn("root 持有", items["ipv6.script"]["evidence"])
-        # Pointing the parameter at a user-owned script (the old hand-installed guard) must not turn it green.
-        _, items, _ = run_json(host, "--only", "ipv6.script", "--param", "ipv6_guard_script=~/.local/bin/ipv6-guard.sh")
+        self.assertEqual(items["ipv6.script"]["status"], mc.PASS)
+        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(501, 0o100755)  # user-owned: a root daemon must not run it
+        _, items, _ = run_json(host, "--only", "ipv6.script")
         self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
         self.assertIn("迁移IPv6守护", items["ipv6.script"]["evidence"])
         host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(0, 0o100775)  # group-writable: still no
         _, items, _ = run_json(host, "--only", "ipv6.script")
         self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        # The old hand-installed guard: plist points into the user's home → ❌ whatever parameters say (there is no
+        # parameter for the script path any more; the check reads what the daemon really executes).
+        old = IPV6_GUARD_PLIST.replace(b"/usr/local/libexec/ipv6-guard.sh", (HOME + "/.local/bin/ipv6-guard.sh").encode()).replace(b"/var/log/ipv6-guard", (HOME + "/.ipv6-guard").encode())
+        host.bytes["/Library/LaunchDaemons/local.ipv6-guard.plist"] = old
+        host.stats["/usr/local/libexec/ipv6-guard.sh"] = Stat(0, 0o100755)
+        _, items, _ = run_json(host, "--only", "ipv6.script")
+        self.assertEqual(items["ipv6.script"]["status"], mc.FAIL)
+        with self.assertRaises(ValueError):
+            run(host, "--param", "ipv6_guard_script=/bin/sh")  # the bypass parameter no longer exists
 
     def test_privileged_commands_go_through_the_root_helper_when_installed(self):
         host = FakeHost()
@@ -745,8 +762,9 @@ class SystemTests(unittest.TestCase):
         host.cmds[("sudo", "-n", mc.PF_HELPER, "info")] = (0, "Status: Enabled\n", "")
         rc, out, _ = mc.Host.priv(host, ["pfctl", "-si"])
         self.assertEqual(out, "Status: Enabled\n")
-        self.assertEqual(mc.helper_argv(["pfctl", "-a", "com.apple/010.x", "-sr"]), ["rules", "com.apple/010.x"])
-        self.assertEqual(mc.helper_argv(["pfctl", "-a", "a", "-t", "t", "-T", "show"]), ["table", "a", "t"])
+        self.assertEqual(mc.helper_argv(["pfctl", "-a", "com.apple/010.local.claude-direct-wall", "-sr"]), ["rules", "com.apple/010.local.claude-direct-wall"])
+        self.assertIsNone(mc.helper_argv(["pfctl", "-a", "com.apple/999.other", "-sr"]))  # not one of the kit's anchors
+        self.assertEqual(mc.helper_argv(["pfctl", "-a", "com.apple/011.local.claude-net-wall", "-t", "t", "-T", "show"]), ["table", "com.apple/011.local.claude-net-wall", "t"])
         self.assertEqual(mc.helper_argv(["cat", "/var/db/NetGuardWatch/last"]), ["watch-last"])
         self.assertEqual(mc.helper_argv(["profiles", "-P"]), ["profiles"])
         self.assertIsNone(mc.helper_argv(["pfctl", "-d"]))

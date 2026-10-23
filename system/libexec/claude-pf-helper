@@ -1,7 +1,9 @@
 #!/bin/sh
 # claude-pf-helper — the ONLY command the kit's sudoers rule lets the desktop user run as root.
-# Every subcommand is a fixed, argument-checked wrapper; nothing here takes a path, an option or a program from the
-# caller. (A sudoers "*" also matches "/" and spaces, so any wildcard rule for install/mv/awk/pfctl was a root shell.)
+# Every subcommand is a fixed, argument-checked wrapper: the caller can only name one of the kit's three anchors or
+# hand over exact host addresses — never a path, an option, a program or free rule text. (A sudoers "*" also matches
+# "/" and spaces, so any wildcard rule for install/mv/awk/pfctl was a root shell; free rule text would let any user
+# process rewrite the wall.)
 # Callers: system/updater/update_shared_ip_wall.py, system/userbin/claude-wall, scripts/mirror_check.py.
 set -eu
 PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH
@@ -10,27 +12,38 @@ BACKUP_DIR=/var/db/ClaudeDirectWall
 LOCK_DIR=/var/run/claude-direct-wall
 WATCH_DIR=/var/db/NetGuardWatch
 
+ANCHOR_010=com.apple/010.local.claude-direct-wall
+TABLE_010=claude_wall_targets
 die() { echo "claude-pf-helper: $*" >&2; exit 64; }
-anchor_ok() { case "$1" in ""|-*|*[!A-Za-z0-9._/-]*|*/*/*) return 1;; esac; return 0; }
-name_ok() { case "$1" in ""|-*|*[!A-Za-z0-9_-]*) return 1;; esac; return 0; }
-ip_ok() { case "$1" in ""|-*|*[!0-9A-Fa-f.:/]*) return 1;; esac; return 0; }
+# Only the kit's own three anchors can be read.
+anchor_ok() { case "$1" in com.apple/010.local.claude-direct-wall|com.apple/011.local.claude-net-wall|com.apple/020.local.leak-guard) return 0;; esac; return 1; }
+name_ok() { case "$1" in ""|-*|*[!A-Za-z0-9_]*) return 1;; esac; return 0; }
+# Exact host addresses only: a dotted quad, or an IPv6 literal (hex and colons). No prefixes, no names.
+ip_ok() {
+	case "$1" in
+		*.*.*.*) case "$1" in *[!0-9.]*) return 1;; esac; return 0;;
+		*:*) case "$1" in *[!0-9A-Fa-f:]*|*::*::*) return 1;; esac; return 0;;
+	esac
+	return 1
+}
 
 cmd=${1:-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-	info|root-rules|lock|unlock|watch-exists|watch-last|watch-history|profiles|persist)
+	info|root-rules|lock|unlock|watch-exists|watch-last|watch-history|profiles)
 		[ $# -eq 0 ] || die "${cmd} 不带参数" ;;
-	rules|vrules|check)
-		[ $# -eq 1 ] && anchor_ok "$1" || die "用法: ${cmd} <anchor>" ;;
+	rules|vrules)
+		[ $# -eq 1 ] && anchor_ok "$1" || die "用法: ${cmd} <anchor>（只能是本套件的三个 anchor）" ;;
 	table)
 		[ $# -eq 2 ] && anchor_ok "$1" && name_ok "$2" || die "用法: table <anchor> <table>" ;;
-	table-add)
-		[ $# -ge 3 ] && anchor_ok "$1" && name_ok "$2" || die "用法: table-add <anchor> <table> <ip>..."
-		i=0; for arg; do i=$((i+1)); [ "$i" -le 2 ] && continue; ip_ok "$arg" || die "地址不合法: ${arg}"; done ;;
+	table-add|persist)
+		# Both act only on the direct wall's own table; the caller supplies exact host addresses and nothing else.
+		[ $# -ge 1 ] && [ $# -le 128 ] || die "用法: ${cmd} <ip>...（1 到 128 个精确地址）"
+		for arg; do ip_ok "$arg" || die "地址不合法（只收精确主机地址，不收网段/主机名）: ${arg}"; done ;;
 	kill)
-		[ $# -eq 1 ] && ip_ok "$1" || die "用法: kill <ip>" ;;
+		[ $# -eq 1 ] && ip_ok "$1" || die "用法: kill <ip>（精确主机地址）" ;;
 	*)
-		die "未知子命令 '${cmd}'（info root-rules rules vrules table table-add kill check persist lock unlock watch-exists watch-last watch-history profiles）" ;;
+		die "未知子命令 '${cmd}'（info root-rules rules vrules table table-add kill persist lock unlock watch-exists watch-last watch-history profiles）" ;;
 esac
 [ "$(id -u)" = 0 ] || die "必须由 root 运行（通过 sudo -n）"
 
@@ -40,16 +53,22 @@ case "$cmd" in
 	rules)         exec /sbin/pfctl -a "$1" -sr ;;
 	vrules)        exec /sbin/pfctl -a "$1" -vsr ;;
 	table)         exec /sbin/pfctl -a "$1" -t "$2" -T show ;;
-	table-add)     a=$1; t=$2; shift 2; exec /sbin/pfctl -a "$a" -t "$t" -T add "$@" ;;
+	table-add)     exec /sbin/pfctl -a "$ANCHOR_010" -t "$TABLE_010" -T add "$@" ;;
 	kill)          case "$1" in *:*) exec /sbin/pfctl -k '::/0' -k "$1";; *) exec /sbin/pfctl -k '0.0.0.0/0' -k "$1";; esac ;;
-	check)
-		tmp=$(mktemp /tmp/claude-pf-check.XXXXXX); cat > "$tmp"
-		if /sbin/pfctl -n -a "$1" -f "$tmp"; then rc=0; else rc=$?; fi
-		rm -f "$tmp"; exit "$rc" ;;
 	persist)
-		# New rules for the direct wall come on stdin: validate, back up the live file, stage next to it, atomic mv.
-		tmp=$(mktemp /tmp/claude-pf-persist.XXXXXX); cat > "$tmp"
-		[ -s "$tmp" ] || { rm -f "$tmp"; die "stdin 为空"; }
+		# Rewrite ONLY the table line of the live rules file with the given addresses; every other line (the rule
+		# body and comments) is copied unchanged, then validated, backed up, staged next to the file and renamed.
+		[ -f "$RULES" ] || die "${RULES} 不存在（先装 Claude 直连墙）"
+		list=""; for ip; do list="${list}${list:+, }${ip}"; done
+		tmp=$(mktemp /tmp/claude-pf-persist.XXXXXX)
+		n=0
+		while IFS= read -r line || [ -n "$line" ]; do
+			case "$line" in
+				"table <${TABLE_010}> persist {"*) printf 'table <%s> persist { %s }\n' "$TABLE_010" "$list" >> "$tmp"; n=$((n+1)) ;;
+				*) printf '%s\n' "$line" >> "$tmp" ;;
+			esac
+		done < "$RULES"
+		[ "$n" -eq 1 ] || { rm -f "$tmp"; die "${RULES} 里的 table 声明行不是恰好一条（${n}），不动"; }
 		/sbin/pfctl -n -a local.claude-direct-wall -f "$tmp" || { rm -f "$tmp"; die "规则语法没过，没有改动"; }
 		[ -d "$BACKUP_DIR" ] || mkdir -m 700 "$BACKUP_DIR"
 		install -o root -g wheel -m 600 "$RULES" "$BACKUP_DIR/rules-before-$(date +%Y%m%d-%H%M%S)-$$.pf"
@@ -57,7 +76,7 @@ case "$cmd" in
 		install -o root -g wheel -m 644 "$tmp" "$staging"; rm -f "$tmp"
 		mv -f "$staging" "$RULES"
 		echo "persisted $RULES" ;;
-	lock)          [ -d "$LOCK_DIR" ] || mkdir -m 755 "$LOCK_DIR"; exec mkdir -m 700 "$LOCK_DIR/update.lock" ;;
+	lock)          [ -d "$LOCK_DIR" ] || mkdir -m 700 "$LOCK_DIR"; exec mkdir -m 700 "$LOCK_DIR/update.lock" ;;
 	unlock)        exec rmdir "$LOCK_DIR/update.lock" ;;
 	watch-exists)  exec test -f "$WATCH_DIR/last" ;;
 	watch-last)    exec cat "$WATCH_DIR/last" ;;

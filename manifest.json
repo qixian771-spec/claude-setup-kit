@@ -93,8 +93,6 @@
       "DnsOverHttpsMode": "off"
     },
     "ipv6_guard_label": "local.ipv6-guard",
-    "ipv6_guard_script": "/usr/local/libexec/ipv6-guard.sh",
-    "ipv6_guard_script_note": "Root-owned, root-only-writable; the reference Mac's older guard lives in ~/.local/bin/ipv6-guard.sh and sets this in mirror.params.json.",
     "ipv6_guard_note": "The reference Mac uses the older label com.niuniu.ipv6-guard; set ipv6_guard_label in mirror.params.json there.",
     "chrome_policy_key": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
     "edge_app": "/Applications/Microsoft Edge.app",
@@ -542,12 +540,10 @@
     {
       "id": "ipv6.script",
       "layer": "守护",
-      "title": "IPv6 守护脚本（params.ipv6_guard_script）存在、可执行、root 持有",
-      "check": "user_file",
+      "title": "IPv6 守护实际执行的程序 root 持有、他人不可写，日志不在用户目录",
+      "check": "daemon_program",
       "args": {
-        "path_param": "ipv6_guard_script",
-        "executable": true,
-        "root_owned": true
+        "label_param": "ipv6_guard_label"
       },
       "next": "见 daemon.ipv6。",
       "platforms": [
@@ -895,7 +891,7 @@
       "requires": [],
       "installer": "installers/安装IPv6守护.command",
       "log": "ipv6-guard",
-      "ai_action": "ls /Library/LaunchDaemons | grep -i ipv6 —— 有别的 label 的守护就把它的 label 和脚本路径写进 mirror.params.json 的 ipv6_guard_label / ipv6_guard_script，重新对账，不让用户装",
+      "ai_action": "ls /Library/LaunchDaemons | grep -i ipv6 —— 有别的 label 的守护就把它写进 mirror.params.json 的 ipv6_guard_label 重新对账，不让用户装；ipv6.script ❌ 说脚本不是 root 持有的，让用户双击 installers/迁移IPv6守护.command",
       "user_action": "双击 installers/安装IPv6守护.command",
       "say": "把 IPv6 关掉并守住，防止绕过代理。双击“安装IPv6守护.command”。"
     },

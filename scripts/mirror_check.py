@@ -85,9 +85,10 @@ def helper_argv(argv):
     a = list(argv)
     if a == ["pfctl", "-si"]:
         return ["info"]
-    if len(a) == 4 and a[:2] == ["pfctl", "-a"] and a[3] == "-sr":
+    kit_anchors = ("com.apple/010.local.claude-direct-wall", "com.apple/011.local.claude-net-wall", "com.apple/020.local.leak-guard")
+    if len(a) == 4 and a[:2] == ["pfctl", "-a"] and a[3] == "-sr" and a[2] in kit_anchors:
         return ["rules", a[2]]
-    if len(a) == 7 and a[:2] == ["pfctl", "-a"] and a[3] == "-t" and a[5:] == ["-T", "show"]:
+    if len(a) == 7 and a[:2] == ["pfctl", "-a"] and a[3] == "-t" and a[5:] == ["-T", "show"] and a[2] in kit_anchors:
         return ["table", a[2], a[4]]
     if a == ["cat", "/var/db/NetGuardWatch/last"]:
         return ["watch-last"]
@@ -622,16 +623,43 @@ def check_root_file(host, p, a):
 
 
 def check_user_file(host, p, a):
-    path = expand(host, p[a["path_param"]] if "path_param" in a else a["path"])
+    path = expand(host, a["path"])
     st = host.lstat(path)
     if st is None:
         return FAIL, "%s 不存在" % path
     if a.get("executable") and not (st.st_mode & 0o111):
         return FAIL, "%s 不可执行" % path
-    if a.get("root_owned") and (host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022):
-        # A root daemon must never run a file someone other than root can rewrite — wherever the file lives.
-        return FAIL, "%s 由 root 守护执行，必须 root 持有、他人不可写、不是符号链接（uid=%s mode=%o）；旧守护请双击 installers/迁移IPv6守护.command" % (path, st.st_uid, st.st_mode & 0o777)
     return PASS, path
+
+
+def check_daemon_program(host, p, a):
+    """What the daemon under params[label_param] actually executes (read from its plist, not from a parameter) must be
+    root-owned, not group/other writable and not a symlink; its log paths must not be under a user's home."""
+    label = p[a["label_param"]]
+    plist = "/Library/LaunchDaemons/%s.plist" % label
+    try:
+        data = plistlib.loads(host.read_bytes(plist))
+    except (HostError, ValueError) as exc:
+        return FAIL, "%s 读不到或不是 plist: %s" % (plist, exc)
+    args = [x for x in data.get("ProgramArguments", []) if isinstance(x, str)]
+    paths = [x for x in args if x.startswith("/")]
+    if not paths:
+        return FAIL, "%s 的 ProgramArguments 没有程序路径: %s" % (plist, args)
+    for path in paths:
+        st = host.lstat(path)
+        if st is None:
+            return FAIL, "%s 执行的 %s 不存在" % (label, path)
+        if host.is_link(path) or st.st_uid != 0 or st.st_mode & 0o022:
+            return FAIL, "%s 以 root 执行 %s，但它不是 root 持有/他人可写/是符号链接（uid=%s mode=%o）：任何能改这个文件的程序都能拿到 root；旧守护请双击 installers/迁移IPv6守护.command" % (
+                label, path, st.st_uid, st.st_mode & 0o777)
+    st_first = host.lstat(paths[0])
+    if not (st_first.st_mode & 0o111):
+        return FAIL, "%s 执行的 %s 不可执行" % (label, paths[0])
+    logs = [data.get(k) for k in ("StandardOutPath", "StandardErrorPath") if data.get(k)]
+    bad_logs = [l for l in logs if not str(l).startswith(("/var/", "/Library/", "/private/var/"))]
+    if bad_logs:
+        return FAIL, "%s 以 root 写日志到用户可控路径 %s（符号链接即可让 root 覆盖任意文件）；应在 /var/log 下" % (label, bad_logs)
+    return PASS, "%s 执行 %s（root 持有，他人不可写）" % (label, paths)
 
 
 def check_launch_daemon(host, p, a):
@@ -731,7 +759,7 @@ def check_manual(host, p, a):
 def check_claude_wall(host, p, a):
     if is_root():
         # 提权对账 runs this file as root: never execute a user-owned script as root. The user-mode run covers S8.
-        return UNKNOWN, "root 模式不执行用户脚本；以用户身份 python3 scripts/mirror_check.py --only tool.claude_wall 对账"
+        return UNKNOWN, "root 模式不执行用户目录下的脚本（这一项由提权对账里的用户身份那一次给出）"
     path = expand(host, a["path"])
     st = host.lstat(path)
     if st is None or not (st.st_mode & 0o111):

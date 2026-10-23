@@ -170,8 +170,8 @@
 | 弱模型只贴了 `[OK]` 没贴 `EXIT=` | 让它贴整份日志尾部 | — |
 | 用户正在用 Claude 时要重载 Clash | 推迟到用户不用时；或只做不需要重载的步 | 让 Clash 重新激活 |
 | `mirror_check` 全 ❓ | `sudo -n` 不免密，让用户双击 `提权对账.command`，再 `next_step --input` | 把 ❓ 当 ✅；AI 自己 sudo |
-| 用户跳过了 S5（不装更新器和 sudoers） | 没有 root 助手，用户态永远读不到 PF：S12 的最终对账用 `提权对账.command` 的 JSON（`--input`），交付时写明 | 为了 ❓=0 去装用户不要的东西 |
-| 机器上已有手工装的 IPv6 守护（脚本在 `~/.local/bin`，以 root 执行） | `ipv6.script` ❌"必须 root 持有"：让用户双击 `installers/迁移IPv6守护.command`（label 不变，脚本换成 `/usr/local/libexec/ipv6-guard.sh`） | 把 `ipv6_guard_script` 指向用户目录糊弄过去 |
+| 用户跳过了 S5（不装更新器和 sudoers） | 没有 root 助手，用户态永远读不到 PF：每一轮和 S12 的最终对账都用 `提权对账.command`（它先以用户身份带网络跑一次、再以 root 跑一次，合并成一份结果）的 JSON（`--input`），交付时写明 | 为了 ❓=0 去装用户不要的东西 |
+| 机器上已有手工装的 IPv6 守护（脚本在 `~/.local/bin`，以 root 执行） | `ipv6.script` ❌"不是 root 持有"：让用户双击 `installers/迁移IPv6守护.command`（label 不变，脚本换成 `/usr/local/libexec/ipv6-guard.sh`） | 改参数糊弄过去（现在检查读的是 plist 里真正执行的程序，改不了） |
 | 另一台 Mac 的网络服务叫 "Wi‑Fi 2" | `--param network_services=Wi‑Fi 2`，并写进 `mirror.params.json` | 改 manifest |
 | 用户要求也配 Firefox | 说明不在覆盖范围（无策略模板），只有 PF UID 规则兜底 | 编一套没验证过的 Firefox 配置 |
 | 用户让 AI 自己 `sudo` 装 | 说明安装只走双击文件，AI 读日志 | 自己提权 |

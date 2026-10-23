@@ -158,7 +158,7 @@ def params_hint(manifest_path, overrides=()):
     if local.exists() or any(str(o).startswith("exit_node=") for o in overrides):
         return None
     return ("提醒: 仓库根目录没有 mirror.params.json，对账用的是参考机默认参数（出口节点 %s）。"
-            "先按 START.md 第 0 步写入本机参数（exit_node；Mac 已有 IPv6 守护的还要 ipv6_guard_label / ipv6_guard_script；"
+            "先按 START.md 第 0 步写入本机参数（exit_node；Mac 已有 IPv6 守护的还要 ipv6_guard_label；"
             "插网线的 Mac 和所有 Windows 要 network_services；用户不做的步骤写 skip_steps），再看下面的结果。"
             % json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"])
 

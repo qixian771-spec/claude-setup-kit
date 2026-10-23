@@ -179,14 +179,16 @@ class RootHelperTests(unittest.TestCase):
                 self.assertTrue(Path(path).exists(), path)
 
     def test_helper_rejects_bad_arguments_before_doing_anything(self):
-        for args in (["rules", "a;b"], ["rules"], ["table", "x", "bad name"], ["table-add", "x", "t", "203.0.113.4", "5;6"],
-                     ["kill", "-k"], ["info", "extra"], ["bogus"], []):
+        for args in (["rules", "a;b"], ["rules"], ["rules", ".."], ["rules", "com.apple/999.other"], ["table", "com.apple/011.local.claude-net-wall", "bad name"],
+                     ["table-add", "203.0.113.4", "5;6"], ["table-add", "0.0.0.0/0"], ["table-add", "dead.beef"], ["table-add"],
+                     ["kill", "-k"], ["kill", "0.0.0.0/0"], ["persist"], ["persist", "203.0.113.0/24"], ["check", "x"], ["info", "extra"], ["bogus"], []):
             proc = self.run_helper(*args)
             self.assertEqual(proc.returncode, 64, args)
             self.assertNotIn("必须由 root", proc.stderr, args)
-        proc = self.run_helper("info")  # valid, but we are not root: refused with the root message, nothing run
-        self.assertEqual(proc.returncode, 64)
-        self.assertIn("必须由 root", proc.stderr)
+        for args in (["info"], ["rules", "com.apple/010.local.claude-direct-wall"], ["table-add", "203.0.113.4", "2001:db8::1"], ["persist", "203.0.113.4"], ["kill", "203.0.113.4"]):
+            proc = self.run_helper(*args)  # valid, but we are not root: refused with the root message, nothing run
+            self.assertEqual(proc.returncode, 64, args)
+            self.assertIn("必须由 root", proc.stderr, args)
 
     def test_updater_and_claude_wall_only_use_helper_subcommands(self):
         helper_cmds = set(re.findall(r"^\t([a-z-]+)\)", self.HELPER.read_text(encoding="utf-8"), re.M))
@@ -199,4 +201,15 @@ class RootHelperTests(unittest.TestCase):
         for cmd in re.findall(r"\$PFH ([a-z-]+)", wall):
             self.assertIn(cmd, helper_cmds, cmd)
         self.assertNotIn("$SUDO awk", wall)
+
+
+class Ipv6MigrationTests(unittest.TestCase):
+    def test_migration_checks_and_backs_up_before_removing_anything(self):
+        text = (ROOT / "installers" / "lib" / "migrate-ipv6-guard.sh").read_text(encoding="utf-8")
+        rm = text.index('rm -f "$plist" "$old"')
+        for must_come_first in ("refuse_existing /usr/local/libexec/ipv6-guard.sh", "networksetup -getinfo", "setv6off", 'cp -p "$plist" "$old"', "bootout_if_loaded"):
+            self.assertLess(text.index(must_come_first), rm, must_come_first)
+        self.assertIn("exit 73", text)
+        self.assertNotIn("|| true", text)
+        self.assertTrue((ROOT / "installers" / "迁移IPv6守护.command").exists())
 
