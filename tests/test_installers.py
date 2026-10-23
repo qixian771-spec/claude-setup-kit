@@ -187,6 +187,8 @@ class RootHelperTests(unittest.TestCase):
             proc = self.run_helper(*args)
             self.assertEqual(proc.returncode, 64, args)
             self.assertNotIn("必须由 root", proc.stderr, args)
+        if sys.platform != "darwin":
+            return  # the address check calls macOS's /usr/bin/python3; on other runners only the rejections above apply
         for args in (["info"], ["rules", "com.apple/010.local.claude-direct-wall"], ["table-add", "203.0.113.4", "2001:db8::1"], ["persist", "203.0.113.4"], ["kill", "203.0.113.4"]):
             proc = self.run_helper(*args)  # valid, but we are not root: refused with the root message, nothing run
             self.assertEqual(proc.returncode, 64, args)
