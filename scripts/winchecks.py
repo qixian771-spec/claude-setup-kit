@@ -88,7 +88,8 @@ def check_ipv6_off(host, p, a):
         seen.append("%s IPv6 绑定=%s" % (svc, state))
         if state.lower() != "false":
             problems.append("%s 的 IPv6 绑定仍启用" % svc)
-        globals6 = _lines(host, "Get-NetIPAddress -InterfaceAlias %s -AddressFamily IPv6 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike 'fe80*' } | ForEach-Object IPAddress" % _q(svc), "ipv6-addr")
+        # No IPv6 address at all is the good case: query quietly and exit 0 so an empty result is not an error.
+        globals6 = _lines(host, "$a = @(Get-NetIPAddress -InterfaceAlias %s -AddressFamily IPv6 -ErrorAction SilentlyContinue); $a | Where-Object { $_.IPAddress -notlike 'fe80*' } | ForEach-Object IPAddress; exit 0" % _q(svc), "ipv6-addr")
         if globals6:
             problems.append("%s 有全局 IPv6 %s" % (svc, globals6))
     if problems:
