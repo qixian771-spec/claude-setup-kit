@@ -3,11 +3,25 @@
 import json
 import py_compile
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def bash_path():
+    """On Windows a bare "bash" can be the WSL launcher in System32; use the bash next to Git's sh."""
+    sh = shutil.which("sh")
+    bash = shutil.which("bash")
+    if sys.platform == "win32" and sh:
+        candidate = Path(sh).with_name("bash.exe")
+        if candidate.exists():
+            return str(candidate)
+    if not bash:
+        raise ValueError("找不到 bash（语法检查需要）")
+    return bash
 
 
 def require(condition, message):
@@ -91,14 +105,14 @@ def main():
         require(not re.search(r"\bopen\([^)]*\)", text) or "encoding=" in text, "%s: open() 需要 encoding=" % path.name)
         counts["python"] += 1
     for path in sorted((ROOT / "installers" / "lib").glob("*.sh")):
-        subprocess.run(["sh", "-n", str(path)], check=True)
+        subprocess.run([shutil.which("sh") or "sh", "-n", str(path)], check=True)
         text = path.read_text(encoding="utf-8")
         require("set -eu" in text or path.name == "common.sh", "%s 缺 set -eu" % path.name)
         require("|| true" not in text, "%s 不准用 || true 吞错误" % path.name)
         counts["sh"] += 1
     for path in sorted((ROOT / "installers").glob("*.command")):
-        subprocess.run(["bash", "-n", str(path)], check=True)
-        require(path.stat().st_mode & 0o100, "%s 不可执行" % path.name)
+        subprocess.run([bash_path(), "-n", str(path)], check=True)
+        require(sys.platform == "win32" or path.stat().st_mode & 0o100, "%s 不可执行" % path.name)
         counts["command"] += 1
     counts["ps1"] = 0
     for path in sorted((ROOT / "system-win").rglob("*.ps1")):

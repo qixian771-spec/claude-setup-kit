@@ -41,11 +41,14 @@ class LauncherTests(unittest.TestCase):
     LIB = ROOT / "installers" / "lib"
 
     def test_every_shell_script_parses(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        import check as check_tool
         for path in sorted(self.LIB.glob("*.sh")):
-            subprocess.run(["sh", "-n", str(path)], check=True)
+            subprocess.run([check_tool.shutil.which("sh") or "sh", "-n", str(path)], check=True)
         for path in sorted((ROOT / "installers").glob("*.command")):
-            subprocess.run(["bash", "-n", str(path)], check=True)
-            self.assertTrue(path.stat().st_mode & 0o100, path.name)
+            subprocess.run([check_tool.bash_path(), "-n", str(path)], check=True)
+            if sys.platform != "win32":
+                self.assertTrue(path.stat().st_mode & 0o100, path.name)
 
     def test_every_installer_named_in_the_manifest_exists(self):
         for comp in MANIFEST["components"]:
