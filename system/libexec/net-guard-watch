@@ -17,7 +17,7 @@ now=$(date -u '+%s')
 stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 state=OK
 notes=''
-note() { notes="${notes:+$notes；}$1"; }
+note() { notes="${notes:+${notes}；}$1"; }
 raise() { case "$state:$1" in OK:*|WARN:REPAIRED|WARN:FAILED|REPAIRED:FAILED) state=$1 ;; esac; }
 
 has_label() { pfctl -a "$1" -sr | grep -F "label \"$2\"" >/dev/null; }
@@ -47,7 +47,7 @@ else
         if [ "$status" -eq 0 ] && anchor_ok "$part"; then
             raise REPAIRED; note "$name 规则缺失，已用现有装载器重装"
         else
-            raise FAILED; note "$name 规则缺失，重装失败（装载器退出码 $status）"
+            raise FAILED; note "$name 规则缺失，重装失败（装载器退出码 ${status}）"
         fi
     done
 fi
@@ -63,13 +63,13 @@ clash_query() {
 if [ -S "$CLASH_SOCKET" ]; then
     if configs=$(clash_query /configs); then
         mode=$(clash_mode "$configs")
-        [ "$mode" = rule ] || { raise WARN; note "Clash 不是“规则”模式（当前: $mode）：共用 CDN 上的 Claude 下载/功能开关会直连"; }
+        [ "$mode" = rule ] || { raise WARN; note "Clash 不是“规则”模式（当前: ${mode}）：共用 CDN 上的 Claude 下载/功能开关会直连"; }
     else
         raise WARN; note 'Clash 控制接口查询失败，无法确认模式'
     fi
     if group=$(clash_query '/proxies/{{EXIT_GROUP_URLENC}}'); then
         exit_now=$(clash_exit "$group")
-        [ "$exit_now" = "$EXPECTED_EXIT" ] || { raise WARN; note "{{EXIT_GROUP}}不是 $EXPECTED_EXIT（当前: $exit_now）"; }
+        [ "$exit_now" = "$EXPECTED_EXIT" ] || { raise WARN; note "{{EXIT_GROUP}}不是 ${EXPECTED_EXIT}（当前: ${exit_now}）"; }
     else
         raise WARN; note 'Clash 控制接口查询失败，无法确认出口'
     fi

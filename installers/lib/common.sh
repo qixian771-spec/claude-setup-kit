@@ -20,7 +20,7 @@ src() { # src <relative path under BUILD>: the file must exist and not be a link
 }
 refuse_existing() { # refuse_existing <path>...: never overwrite; uninstall first
     for dst in "$@"; do
-        [ ! -e "$dst" ] && [ ! -L "$dst" ] || { echo "已存在，拒绝覆盖: $dst（要重装先运行对应的卸载）" >&2; exit 72; }
+        [ ! -e "$dst" ] && [ ! -L "$dst" ] || { echo "已存在，拒绝覆盖: ${dst}（要重装先运行对应的卸载）" >&2; exit 72; }
     done
 }
 pf_enabled() { pfctl -s info 2>/dev/null | grep -F 'Status: Enabled' >/dev/null; }
@@ -36,7 +36,7 @@ pf_conf_add() { # pf_conf_add <anchor> <rules file>
     if ! pfctl -n -f /etc/pf.conf >/dev/null 2>&1; then
         cp -p "$bk" /etc/pf.conf; echo "pf.conf 语法检查失败，已恢复备份 $bk" >&2; exit 73
     fi
-    echo "pf.conf 追加: $line（备份 $bk）"
+    echo "pf.conf 追加: ${line}（备份 ${bk}）"
 }
 pf_conf_remove() { # pf_conf_remove <anchor>
     grep -F "load anchor \"$1\"" /etc/pf.conf >/dev/null || return 0
@@ -46,7 +46,7 @@ pf_conf_remove() { # pf_conf_remove <anchor>
     grep -vF "load anchor \"$1\"" /etc/pf.conf > "$tmp"
     pfctl -n -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp"; echo "去掉装载行后 pf.conf 语法检查失败，未改动" >&2; exit 73; }
     cat "$tmp" > /etc/pf.conf; rm -f "$tmp"
-    echo "pf.conf 已去掉 $1 的装载行（备份 $bk）"
+    echo "pf.conf 已去掉 $1 的装载行（备份 ${bk}）"
 }
 daemon_loaded() { launchctl print "system/$1" >/dev/null 2>&1; }
 bootout_if_loaded() { if daemon_loaded "$1"; then launchctl bootout "system/$1"; fi; }
