@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import next_step as ns  # noqa: E402
 
 MANIFEST = ns.load_manifest(ROOT / "manifest.json")
-ALL_IDS = [c["id"] for c in MANIFEST["components"]]
+ALL_IDS = [c["id"] for c in MANIFEST["components"] if "darwin" in c.get("platforms", ["darwin"])]
 
 
 def result(overrides=None, default="PASS"):

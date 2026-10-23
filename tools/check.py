@@ -42,13 +42,16 @@ def main():
             require((doc.parent / link).resolve().exists(), "%s: 链接不存在 %s" % (doc.name, link))
 
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-    ids = [c["id"] for c in manifest["components"]]
+    ids = [c["id"] for c in manifest["components"] if "darwin" in c.get("platforms", ["darwin"])]
+    for c in manifest["components"]:
+        require(set(c.get("platforms", ["darwin"])) <= {"darwin", "win32"} and c.get("platforms"), "%s: platforms 不对" % c["id"])
     runbook = (ROOT / "references" / "runbook.md").read_text(encoding="utf-8")
     missing = [i for i in ids if "`%s`" % i not in runbook]
     require(not missing, "执行手册没有提到这些组件 id: %s" % missing)
     for comp in manifest["components"]:
         for rel in re.findall(r"installers/[^\s（）,;。；：，]+", comp["next"]):
             require((ROOT / rel).is_file(), "%s 的下一步指向不存在的 %s" % (comp["id"], rel))
+        # Windows installers (installers\win\...) arrive with W3–W5; until then only the names are reserved.
     for launcher in (ROOT / "installers").glob("安装*.command"):
         require(launcher.name in runbook, "手册没有提到 %s" % launcher.name)
     sys.path.insert(0, str(ROOT / "scripts"))

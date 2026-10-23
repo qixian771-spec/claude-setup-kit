@@ -11,14 +11,19 @@ import http.client
 import ipaddress
 import json
 import os
+import base64
 import plistlib
-import pwd
 import re
 import socket
 import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import quote, urlsplit
+
+try:
+    import pwd  # Unix only
+except ImportError:  # Windows
+    pwd = None
 
 ROOT = Path(__file__).resolve().parent.parent
 PASS, FAIL, UNKNOWN, INFO, MANUAL = "PASS", "FAIL", "UNKNOWN", "INFO", "MANUAL"
@@ -44,11 +49,16 @@ class UnixHTTPConnection(http.client.HTTPConnection):
         self.sock.connect(self.unix_path)
 
 
+def platform_key():
+    return "win32" if sys.platform.startswith("win") else sys.platform
+
+
 class Host:
     """Every query the checks make goes through here, so tests can replace it."""
 
     def __init__(self):
         self.calls = []
+        self.platform = platform_key()
 
     def run(self, argv, timeout=20):
         self.calls.append(list(argv))
@@ -98,6 +108,9 @@ class Host:
             conn = UnixHTTPConnection(parts.path, timeout)
             target = "/"
             headers = {}
+        elif parts.scheme == "pipe":
+            # Clash Verge on Windows serves the controller on a named pipe; see pipe_api().
+            raise HostError("pipe:// 走 pipe_api")
         elif parts.scheme == "http":
             conn = http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=timeout)
             target = parts.path or "/"
@@ -109,7 +122,45 @@ class Host:
             raise HostError("不支持的 API 地址: %s" % url)
         return conn, target, headers
 
+    def pipe_api(self, name, path, timeout=10):
+        """Minimal HTTP/1.1 over a Windows named pipe (\\\\.\\pipe\\<name>)."""
+        pipe = "\\\\.\\pipe\\" + name
+        request = ("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" % path).encode("ascii")
+        try:
+            with open(pipe, "r+b", buffering=0) as handle:
+                handle.write(request)
+                raw = b""
+                while True:
+                    chunk = handle.read(65536)
+                    if not chunk:
+                        break
+                    raw += chunk
+                    if b"\r\n\r\n" in raw:
+                        head, _, body = raw.partition(b"\r\n\r\n")
+                        m = re.search(rb"(?i)content-length:\s*(\d+)", head)
+                        if m and len(body) >= int(m.group(1)):
+                            break
+        except OSError as exc:
+            raise HostError("命名管道不可达 %s: %s" % (pipe, exc))
+        head, _, body = raw.partition(b"\r\n\r\n")
+        status = head.split(b" ", 2)
+        if len(status) < 2 or status[1] != b"200":
+            raise HostError("API %s 返回 %s" % (path, status[1].decode("ascii", "replace") if len(status) > 1 else "?"))
+        return json.loads(body.decode("utf-8", "replace"))
+
+    def ps(self, script, tag=None, timeout=60):
+        """Run a PowerShell snippet (UTF-8 output, errors stop); returns stdout. `tag` only names it for tests."""
+        prelude = "[Console]::OutputEncoding=[Text.Encoding]::UTF8\n$ProgressPreference='SilentlyContinue'\n$ErrorActionPreference='Stop'\n"
+        encoded = base64.b64encode((prelude + script).encode("utf-16le")).decode("ascii")
+        rc, out, err = self.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                                 "-EncodedCommand", encoded], timeout=timeout)
+        if rc != 0:
+            raise HostError("PowerShell 失败（%s）: %s" % (tag or "脚本", clixml_error(err) or "rc=%s" % rc))
+        return out
+
     def api(self, base, path, timeout=10):
+        if base.startswith("pipe://"):
+            return self.pipe_api(base[len("pipe://"):], path, timeout)
         conn, prefix, headers = self.http_get(base, timeout)
         try:
             conn.request("GET", path if prefix == "/" else prefix.rstrip("/") + path, headers=headers)
@@ -124,38 +175,65 @@ class Host:
         return json.loads(body)
 
     def console_uid(self):
+        if pwd is None:
+            return None  # Windows: identity is the SID, see winchecks
         if "SUDO_UID" in os.environ:
             return int(os.environ["SUDO_UID"])
         return os.getuid()
 
     def home(self):
+        if pwd is None:
+            return Path(os.environ["USERPROFILE"])
         return Path(pwd.getpwuid(self.console_uid()).pw_dir)
 
     def console_name(self):
+        if pwd is None:
+            return os.environ.get("USERNAME", "")
         return pwd.getpwuid(self.console_uid()).pw_name
+
+    def env(self, name):
+        value = os.environ.get(name)
+        if not value:
+            raise HostError("环境变量 %%%s%% 没有设置" % name)
+        return value
 
     def now(self):
         return dt.datetime.now(dt.timezone.utc)
 
-    def is_macos(self):
-        return sys.platform == "darwin"
+
+def clixml_error(stderr):
+    """PowerShell writes errors as CLIXML on stderr; return the first human-readable error line."""
+    text = stderr.strip()
+    if not text:
+        return ""
+    if text.startswith("#< CLIXML"):
+        parts = re.findall(r'<S S="Error">(.*?)</S>', text, re.S)
+        text = " ".join(parts) if parts else text
+        text = text.replace("_x000D__x000A_", "\n").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    return text.strip().splitlines()[0][:160]
 
 
 def expand(host, path):
     path = str(path)
     if path.startswith("~/"):
         return str(host.home() / path[2:])
+    m = re.match(r"^%([A-Z_]+)%/(.*)$", path)
+    if m:  # Windows %APPDATA%/... style entries
+        return os.path.join(host.env(m.group(1)), m.group(2).replace("/", os.sep))
     return path
 
 
 # ---------------------------------------------------------------- checks
 # Each check returns (status, evidence). Raising HostError/NeedSudo yields UNKNOWN.
 
-def check_macos(host, p, a):
-    if not host.is_macos():
-        return FAIL, "不是 macOS: %s" % sys.platform
-    rc, out, _ = host.run(["sw_vers", "-productVersion"])
-    return PASS, "macOS %s" % out.strip()
+def check_os(host, p, a):
+    if host.platform == "darwin":
+        rc, out, _ = host.run(["sw_vers", "-productVersion"])
+        return PASS, "macOS %s" % out.strip()
+    if host.platform == "win32":
+        out = host.ps("(Get-CimInstance Win32_OperatingSystem) | ForEach-Object { $_.Caption + ' ' + $_.Version }", tag="os")
+        return PASS, out.strip()
+    return FAIL, "不支持的平台: %s" % host.platform
 
 
 def check_clash_api(host, p, a):
@@ -616,26 +694,48 @@ def check_language(host, p, a):
 
 
 CHECKS = {name[len("check_"):]: fn for name, fn in globals().items() if name.startswith("check_")}
+CHECKS["macos"] = check_os  # older manifests
 NETWORK_CHECKS = {"exit_ip", "dns_upstream"}
+
+
+def platform_checks(platform):
+    """Check table for a platform: Windows variants (scripts/winchecks.py) override the common ones."""
+    table = dict(CHECKS)
+    if platform == "win32":
+        import winchecks
+        # When this file runs as __main__ a plain `import mirror_check` would be a second
+        # module object with its own HostError class; bind winchecks to this one.
+        winchecks.mc = sys.modules[__name__]
+        table.update(winchecks.CHECKS)
+    return table
 
 
 # ---------------------------------------------------------------- runner
 
-def load_manifest(path):
+def load_manifest(path, platform=None):
+    """Manifest with only this platform's components; params merged with params_<platform> (win32 → params_win)."""
+    platform = platform or platform_key()
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("format") != 1:
         raise ValueError("manifest format 不支持: %s" % data.get("format"))
     ids = [c["id"] for c in data["components"]]
     if len(ids) != len(set(ids)):
         raise ValueError("manifest 有重复的 id")
-    for c in data["components"]:
-        if c["check"] not in CHECKS:
-            raise ValueError("%s: 未知 check %s" % (c["id"], c["check"]))
-    return data
+    table = platform_checks(platform)
+    comps = [c for c in data["components"] if platform in c.get("platforms", ["darwin"])]
+    for c in comps:
+        if c["check"] not in table:
+            raise ValueError("%s: 平台 %s 没有 check %s" % (c["id"], platform, c["check"]))
+    params = dict(data["params"])
+    if platform == "win32":
+        params.update(data.get("params_win", {}))
+    return {"format": 1, "name": data.get("name"), "platform": platform, "params": params,
+            "components": comps, "steps": data.get("steps_win" if platform == "win32" else "steps", []),
+            "all_components": data["components"]}
 
 
 def run_component(host, params, comp, network=True):
-    fn = CHECKS[comp["check"]]
+    fn = platform_checks(host.platform)[comp["check"]]
     if comp["check"] in NETWORK_CHECKS and not network:
         status, evidence = UNKNOWN, "--no-network，未实测"
     else:
@@ -648,7 +748,7 @@ def run_component(host, params, comp, network=True):
     item = {"id": comp["id"], "layer": comp["layer"], "title": comp["title"],
             "status": status, "evidence": evidence}
     if status not in (PASS, INFO):
-        item["next"] = comp.get("next", "")
+        item["next"] = comp.get("next_win", comp.get("next", "")) if host.platform == "win32" else comp.get("next", "")
     return item
 
 
@@ -661,8 +761,8 @@ def exit_code(items):
     return 0
 
 
-def render(items, params, code):
-    lines = ["# mirror-check  出口分组=%s 节点=%s TUN=%s" % (params["exit_group"], params["exit_node"], params["tun_device"]), ""]
+def render(items, params, code, platform="darwin"):
+    lines = ["# mirror-check  平台=%s 出口分组=%s 节点=%s TUN=%s" % (platform, params["exit_group"], params["exit_node"], params["tun_device"]), ""]
     for i in items:
         lines.append("%s %-16s %s" % (MARK[i["status"]], i["id"], i["title"]))
         lines.append("    %s" % i["evidence"])
@@ -692,14 +792,22 @@ def apply_overrides(params, overrides):
 
 
 def main(argv=None, host=None):
+    for stream in (sys.stdout, sys.stderr):
+        # Windows consoles default to GBK; the tables use ✅/❌ and Chinese.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", default=str(ROOT / "manifest.json"))
     ap.add_argument("--json", action="store_true", help="输出 JSON 而不是表格")
     ap.add_argument("--only", help="只跑这些 id（逗号分隔）")
     ap.add_argument("--no-network", action="store_true", help="跳过出口/DNS 实测（结果记为 ❓）")
     ap.add_argument("--param", action="append", default=[], help="覆盖 manifest params，如 exit_node=节点名")
+    ap.add_argument("--platform", choices=("darwin", "win32"), help="（测试/CI 用）按这个平台选组件，默认自动")
     args = ap.parse_args(argv)
-    manifest = load_manifest(args.manifest)
+    host = host or Host()
+    if args.platform:
+        host.platform = args.platform
+    manifest = load_manifest(args.manifest, host.platform)
     params = dict(manifest["params"])
     local = Path(args.manifest).parent / "mirror.params.json"
     if local.exists():
@@ -713,14 +821,13 @@ def main(argv=None, host=None):
         if unknown:
             ap.error("未知 id: %s" % sorted(unknown))
         comps = [c for c in comps if c["id"] in wanted]
-    host = host or Host()
     items = [run_component(host, params, c, network=not args.no_network) for c in comps]
     code = exit_code(items)
     if args.json:
-        print(json.dumps({"generated_utc": host.now().isoformat(), "manifest": args.manifest,
+        print(json.dumps({"generated_utc": host.now().isoformat(), "manifest": args.manifest, "platform": host.platform,
                           "params": params, "exit": code, "items": items}, ensure_ascii=False, indent=2))
     else:
-        print(render(items, params, code))
+        print(render(items, params, code, host.platform))
     return code
 
 

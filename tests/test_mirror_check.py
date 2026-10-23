@@ -179,6 +179,8 @@ class FakeHost:
         self.bytes = {"/Library/Managed Preferences/com.google.Chrome.plist": CHROME_POLICY}
         self.links = set()
         self.sudo, self.macos, self.uid, self._now = sudo, macos, uid, now
+        self.platform = "darwin" if macos else "linux"
+        self.ps_outputs = {}
         self.calls, self.priv_calls = [], []
 
     def run(self, argv, timeout=20):
@@ -214,6 +216,12 @@ class FakeHost:
         if path not in self.apis:
             raise mc.HostError("API 不可达 %s" % base)
         return self.apis[path]
+
+    def ps(self, script, tag=None, timeout=60):
+        self.calls.append(["powershell", tag or script[:40]])
+        if tag not in self.ps_outputs:
+            raise mc.HostError("PowerShell 失败（%s）" % tag)
+        return self.ps_outputs[tag]
 
     def console_uid(self):
         return self.uid
@@ -298,9 +306,15 @@ class BaselineTests(unittest.TestCase):
 
     def test_source_has_no_write_paths(self):
         source = (ROOT / "scripts" / "mirror_check.py").read_text(encoding="utf-8")
+        # pipe_api opens the Clash controller pipe read/write to send one GET; nothing else may open files for writing.
+        head, _, rest = source.partition("    def pipe_api(")
+        _, _, tail = rest.partition("    def ps(")
+        scanned = head + tail
         for token in ("write_text", "write_bytes", "os.remove", "shutil", "open(", "unlink", "rename"):
-            self.assertNotIn(token, source, token)
+            self.assertNotIn(token, scanned, token)
         self.assertEqual(source.count("subprocess.run("), 1)
+        for token in ("write_text", "write_bytes", "os.remove", "shutil", "unlink"):
+            self.assertNotIn(token, (ROOT / "scripts" / "winchecks.py").read_text(encoding="utf-8"), token)
 
 
 class DriftTests(unittest.TestCase):
@@ -602,9 +616,10 @@ class DaemonTests(unittest.TestCase):
 
 
 class SystemTests(unittest.TestCase):
-    def test_not_macos(self):
-        _, items, _ = run_json(FakeHost(macos=False), "--only", "os")
-        self.assertEqual(items["os"]["status"], mc.FAIL)
+    def test_unsupported_platform(self):
+        status, evidence = mc.check_os(FakeHost(macos=False), {}, {})
+        self.assertEqual(status, mc.FAIL)
+        self.assertIn("linux", evidence)
 
     def test_timezone_in_asia(self):
         host = FakeHost()
@@ -642,7 +657,7 @@ class CliTests(unittest.TestCase):
     def test_json_shape(self):
         code, out = run(FakeHost(), "--json", "--only", "os")
         data = json.loads(out)
-        self.assertEqual(set(data), {"generated_utc", "manifest", "params", "exit", "items"})
+        self.assertEqual(set(data), {"generated_utc", "manifest", "platform", "params", "exit", "items"})
         self.assertEqual(data["items"][0]["id"], "os")
         self.assertNotIn("next", data["items"][0])
 

@@ -83,22 +83,40 @@
       "DnsOverHttpsMode": "off"
     },
     "ipv6_guard_label": "local.ipv6-guard",
-    "ipv6_guard_note": "The reference Mac uses the older label com.niuniu.ipv6-guard; set ipv6_guard_label in mirror.params.json there."
+    "ipv6_guard_note": "The reference Mac uses the older label com.niuniu.ipv6-guard; set ipv6_guard_label in mirror.params.json there.",
+    "chrome_policy_key": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome",
+    "edge_app": "/Applications/Microsoft Edge.app",
+    "edge_policy_key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
+    "timezone_forbid_win": [
+      "China Standard Time"
+    ],
+    "firewall_prefix": "claude-setup-kit:",
+    "task_prefix": "claude-setup-kit",
+    "watch_dir": "C:\\ProgramData\\claude-setup-kit\\watch"
   },
   "components": [
     {
       "id": "os",
       "layer": "系统",
-      "title": "macOS",
-      "check": "macos",
-      "next": "本清单只适用于 macOS。"
+      "title": "操作系统",
+      "check": "os",
+      "next": "本清单只适用于 macOS 与 Windows 10/11。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "clash.core",
       "layer": "代理",
       "title": "Clash 核心 API 可达",
       "check": "clash_api",
-      "next": "打开 Clash Verge；确认服务模式已安装、核心在运行。API 路径由 params.clash_api 指定。"
+      "next": "打开 Clash Verge；确认服务模式已安装、核心在运行。API 路径由 params.clash_api 指定。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "打开 Clash Verge（Windows 版控制通道是命名管道 \\\\.\\pipe\\verge-mihomo；核心没运行就连不上）。"
     },
     {
       "id": "clash.mode",
@@ -108,70 +126,112 @@
       "args": {
         "expect": "rule"
       },
-      "next": "在 Clash Verge 把模式切回“规则”，不要用全局或直连。"
+      "next": "在 Clash Verge 把模式切回“规则”，不要用全局或直连。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "clash.tun",
       "layer": "代理",
       "title": "TUN 已开（设备、地址、IPv6 关）",
       "check": "clash_tun",
-      "next": "Clash Verge → 设置 → 开启 TUN 模式；运行配置里 tun.device 与 params.tun_device 一致，ipv6: false。"
+      "next": "Clash Verge → 设置 → 开启 TUN 模式；运行配置里 tun.device 与 params.tun_device 一致，ipv6: false。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "Clash Verge → 设置 → 开启 TUN 模式（需要服务模式）；适配器名默认 Meta。"
     },
     {
       "id": "clash.exit",
       "layer": "代理",
       "title": "出口分组：手动、无 DIRECT、固定节点",
       "check": "clash_exit_group",
-      "next": "分组必须是 select 类型、成员不含 DIRECT/REJECT，当前选中 params.exit_node。不要为了验收切换节点。"
+      "next": "分组必须是 select 类型、成员不含 DIRECT/REJECT，当前选中 params.exit_node。不要为了验收切换节点。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "clash.rules",
       "layer": "代理",
       "title": "分流规则：Claude 域名→出口、STUN→REJECT、国内→DIRECT、兜底→出口",
       "check": "clash_rules",
-      "next": "按 templates/clash-verge.template.yaml 的 rules 段补齐缺的规则，重新激活配置。"
+      "next": "按 templates/clash-verge.template.yaml 的 rules 段补齐缺的规则，重新激活配置。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "clash.dns",
       "layer": "代理",
       "title": "Clash DNS：本地 53、fake-ip、Claude DoH 经出口、无 fallback",
       "check": "clash_dns_config",
-      "next": "按 templates/clash-verge.template.yaml 的 dns 段合并（不要整段替换），重新激活后再对账。"
+      "next": "按 templates/clash-verge.template.yaml 的 dns 段合并（不要整段替换），重新激活后再对账。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "net.tun_iface",
       "layer": "网络",
       "title": "TUN 接口存在且有地址",
       "check": "tun_iface",
-      "next": "TUN 没起来：检查 Clash 服务模式与 TUN 开关；接口名见 params.tun_device。"
+      "next": "TUN 没起来：检查 Clash 服务模式与 TUN 开关；接口名见 params.tun_device。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "TUN 适配器 Meta 不在：在 Clash Verge 里开 TUN 模式。"
     },
     {
       "id": "dns.local53",
       "layer": "网络",
       "title": "本地 53 端口 UDP/TCP 都由 Clash 应答（fake-ip）",
       "check": "dns_local53",
-      "next": "127.0.0.1:53 没有应答或不是 fake-ip：检查 clash.dns 的 listen 与 enhanced-mode，确认没有其他程序占用 53。"
+      "next": "127.0.0.1:53 没有应答或不是 fake-ip：检查 clash.dns 的 listen 与 enhanced-mode，确认没有其他程序占用 53。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "dns.system",
       "layer": "网络",
       "title": "系统 DNS 处于已知受管状态",
       "check": "system_dns",
-      "next": "只接受 params.system_dns_accept 里的值；其他值表示有人手工改过系统 DNS，先查原因再按手册 S3 处理。"
+      "next": "只接受 params.system_dns_accept 里的值；其他值表示有人手工改过系统 DNS，先查原因再按手册 S3 处理。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "net.ipv6_off",
       "layer": "网络",
       "title": "物理网络服务 IPv6 = Off，接口无全局 IPv6",
       "check": "ipv6_off",
-      "next": "双击 installers/安装IPv6守护.command（它会先关 IPv6 再装守护）。"
+      "next": "双击 installers/安装IPv6守护.command（它会先关 IPv6 再装守护）。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "双击 installers\\win\\安装IPv6守护.cmd（它会先解绑物理网卡的 IPv6 再装计划任务）。"
     },
     {
       "id": "pf.enabled",
       "layer": "防火墙",
       "title": "PF 已启用",
       "check": "pf_enabled",
-      "next": "装载器会持有启用引用；先装 pf.010/pf.020 的装载器再看。"
+      "next": "装载器会持有启用引用；先装 pf.010/pf.020 的装载器再看。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "pf.010",
@@ -191,7 +251,10 @@
           "mode": "nonempty"
         }
       },
-      "next": "双击 installers/安装Claude直连墙.command。"
+      "next": "双击 installers/安装Claude直连墙.command。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "pf.011",
@@ -215,7 +278,10 @@
           ]
         }
       },
-      "next": "双击 installers/安装Anthropic整段墙.command。"
+      "next": "双击 installers/安装Anthropic整段墙.command。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "pf.020",
@@ -234,7 +300,10 @@
         ],
         "user_rule": true
       },
-      "next": "双击 installers/安装防泄露墙.command；规则里的 user 必须等于当前登录用户的 UID。"
+      "next": "双击 installers/安装防泄露墙.command；规则里的 user 必须等于当前登录用户的 UID。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "pf.conf",
@@ -247,7 +316,10 @@
           "load anchor \"com.apple/020.local.leak-guard\" from \"/etc/pf.anchors/local.leak-guard\""
         ]
       },
-      "next": "安装器会把这两行追加到 /etc/pf.conf（先 pfctl -n 检查语法）。011 由自己的 LaunchDaemon 装载，不写进 pf.conf。"
+      "next": "安装器会把这两行追加到 /etc/pf.conf（先 pfctl -n 检查语法）。011 由自己的 LaunchDaemon 装载，不写进 pf.conf。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "loader.010",
@@ -258,7 +330,10 @@
         "path": "/usr/local/libexec/claude-direct-wall",
         "mode": "755"
       },
-      "next": "见 pf.010。"
+      "next": "见 pf.010。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "loader.011",
@@ -269,7 +344,10 @@
         "path": "/usr/local/libexec/claude-net-wall",
         "mode": "755"
       },
-      "next": "见 pf.011。"
+      "next": "见 pf.011。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "loader.020",
@@ -280,7 +358,10 @@
         "path": "/usr/local/libexec/leak-guard-loader",
         "mode": "755"
       },
-      "next": "见 pf.020。"
+      "next": "见 pf.020。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "loader.watch",
@@ -297,7 +378,10 @@
           }
         ]
       },
-      "next": "双击 installers/安装自检守护.command。"
+      "next": "双击 installers/安装自检守护.command。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.010",
@@ -307,7 +391,10 @@
       "args": {
         "label": "local.claude-direct-wall"
       },
-      "next": "见 pf.010。"
+      "next": "见 pf.010。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.011",
@@ -317,7 +404,10 @@
       "args": {
         "label": "local.claude-net-wall"
       },
-      "next": "见 pf.011。"
+      "next": "见 pf.011。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.020",
@@ -327,7 +417,10 @@
       "args": {
         "label": "local.leak-guard"
       },
-      "next": "见 pf.020。"
+      "next": "见 pf.020。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.updater",
@@ -341,7 +434,10 @@
           1
         ]
       },
-      "next": "双击 installers/安装地址更新器.command。退出码 1 是它保守停止的正常情况。"
+      "next": "双击 installers/安装地址更新器.command。退出码 1 是它保守停止的正常情况。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.watch",
@@ -351,7 +447,10 @@
       "args": {
         "label": "local.net-guard-watch"
       },
-      "next": "双击 installers/安装自检守护.command。"
+      "next": "双击 installers/安装自检守护.command。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "daemon.ipv6",
@@ -361,7 +460,10 @@
       "args": {
         "label_param": "ipv6_guard_label"
       },
-      "next": "双击 installers/安装IPv6守护.command。"
+      "next": "双击 installers/安装IPv6守护.command。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "watch.fresh",
@@ -369,9 +471,15 @@
       "title": "自检守护 3 分钟内有 OK 记录",
       "check": "watch_fresh",
       "args": {
-        "dir": "/var/db/NetGuardWatch"
+        "dir": "/var/db/NetGuardWatch",
+        "dir_win": "C:\\ProgramData\\claude-setup-kit\\watch"
       },
-      "next": "守护没在跑或最近一次不是 OK：先看 /var/db/NetGuardWatch/history.log 的最后几行。"
+      "next": "守护没在跑或最近一次不是 OK：先看 /var/db/NetGuardWatch/history.log 的最后几行。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "守护没在跑或最近一次不是 OK：看 C:\\ProgramData\\claude-setup-kit\\watch\\history.log 的最后几行。"
     },
     {
       "id": "updater.fresh",
@@ -382,7 +490,10 @@
         "package": "/Library/Application Support/ClaudeDirectWallUpdater",
         "state_log": "~/Library/Application Support/ClaudeDirectWallUpdater/stdout.log"
       },
-      "next": "看 stdout.log 最后几条 status；连续 STOPPED 超过 6 小时要查 update_shared_ip_wall.py 的报告。"
+      "next": "看 stdout.log 最后几条 status；连续 STOPPED 超过 6 小时要查 update_shared_ip_wall.py 的报告。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "ipv6.script",
@@ -393,14 +504,22 @@
         "path": "~/.local/bin/ipv6-guard.sh",
         "executable": true
       },
-      "next": "见 daemon.ipv6。"
+      "next": "见 daemon.ipv6。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "chrome.policy",
       "layer": "浏览器",
       "title": "Chrome 管理策略：WebRTC 禁非代理 UDP、DoH 关",
       "check": "chrome_policy",
-      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 隐私与安全性 → 描述文件 里安装；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。"
+      "next": "双击 installers/Chrome策略.mobileconfig，在 系统设置 → 隐私与安全性 → 描述文件 里安装；手工写进 /Library/Managed Preferences 的文件会被系统清掉，不算。 Windows：双击 installers\\win\\Chrome策略.reg 导入注册表策略。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "双击 installers\\win\\Chrome策略.reg 导入注册表策略，然后 Chrome 完全退出重开。"
     },
     {
       "id": "browser.webrtc",
@@ -410,7 +529,12 @@
       "args": {
         "text": "用要验收的浏览器打开 assets/webrtc-test.html，等 7 秒：候选里不能出现任何公网 IPv4/IPv6；只有 mDNS（.local）候选或无候选才算过。再打开 https://ippure.com/claude.html 核对 WebRTC 一项。"
       },
-      "next": "出现公网地址：Chrome 看 chrome://policy 是否采纳策略；Safari 看 pf.020 的 STUN 计数是否增长。"
+      "next": "出现公网地址：Chrome 看 chrome://policy 是否采纳策略；Safari 看 pf.020 的 STUN 计数是否增长。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "用 Chrome/Edge 打开 assets/webrtc-test.html，等 7 秒：候选里不能出现公网地址；再打开 https://ippure.com/claude.html 核对。"
     },
     {
       "id": "tool.claude_wall",
@@ -420,35 +544,173 @@
       "args": {
         "path": "~/.local/bin/claude-wall"
       },
-      "next": "双击 installers/安装体检工具.command；退出码 6 表示自检守护异常。"
+      "next": "双击 installers/安装体检工具.command；退出码 6 表示自检守护异常。",
+      "platforms": [
+        "darwin"
+      ]
     },
     {
       "id": "net.exit_ip",
       "layer": "实测",
       "title": "HTTPS 出口国家不在禁止列表（经代理，不碰 Anthropic 地址）",
       "check": "exit_ip",
-      "next": "出口落在禁止国家或请求失败：节点不可用或 Clash 没接管流量；不要直连重试。"
+      "next": "出口落在禁止国家或请求失败：节点不可用或 Clash 没接管流量；不要直连重试。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "dns.upstream",
       "layer": "实测",
       "title": "DNS 上游与 HTTPS 出口一致，解析器属于预期提供商",
       "check": "dns_upstream",
-      "next": "解析器不属于预期提供商或与出口不一致：检查 clash.dns 的 nameserver 是否带 #出口分组。"
+      "next": "解析器不属于预期提供商或与出口不一致：检查 clash.dns 的 nameserver 是否带 #出口分组。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     {
       "id": "sys.timezone",
       "layer": "系统",
       "title": "系统时区不在中国/亚洲",
       "check": "timezone",
-      "next": "系统设置 → 通用 → 日期与时间 → 关闭自动设置，选 America/Los_Angeles 等与出口一致的时区（ippure 时区项 30 分）。"
+      "next": "系统设置 → 通用 → 日期与时间 → 关闭自动设置，选 America/Los_Angeles 等与出口一致的时区（ippure 时区项 30 分）。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "设置 → 时间和语言 → 日期和时间：关自动，选节点所在时区（或管理员运行 tzutil /s）。"
     },
     {
       "id": "sys.language",
       "layer": "系统",
       "title": "系统语言顺序（仅记录，可选）",
       "check": "language",
-      "next": "可选：系统设置 → 通用 → 语言与地区 把 English 拖到第一位（ippure 浏览器语言项 24 分）；改了界面会变英文，由使用者决定。"
+      "next": "可选：系统设置 → 通用 → 语言与地区 把 English 拖到第一位（ippure 浏览器语言项 24 分）；改了界面会变英文，由使用者决定。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "可选：设置 → 时间和语言 → 语言：把 English 调到首位。"
+    },
+    {
+      "id": "wf.enabled",
+      "layer": "防火墙",
+      "title": "Windows 防火墙三个配置文件都启用",
+      "check": "firewall_enabled",
+      "platforms": [
+        "win32"
+      ],
+      "next": "双击 installers\\win\\安装防火墙规则.cmd（它会启用全部配置文件再加规则）。"
+    },
+    {
+      "id": "wf.011",
+      "layer": "防火墙",
+      "title": "Anthropic 整段网络在物理网卡上出站阻断（只准走 TUN）",
+      "check": "firewall_rules",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "rules": [
+          {
+            "name": "net-wall v4",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "net-wall v6",
+            "action": "Block",
+            "direction": "Outbound"
+          }
+        ]
+      },
+      "next": "双击 installers\\win\\安装防火墙规则.cmd。"
+    },
+    {
+      "id": "wf.020",
+      "layer": "防火墙",
+      "title": "物理网卡封 DNS/STUN，本用户公网只准走 TUN",
+      "check": "firewall_rules",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "rules": [
+          {
+            "name": "leak-guard dns",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "leak-guard stun",
+            "action": "Block",
+            "direction": "Outbound"
+          },
+          {
+            "name": "leak-guard user-public",
+            "action": "Block",
+            "direction": "Outbound"
+          }
+        ]
+      },
+      "next": "双击 installers\\win\\安装防火墙规则.cmd；规则里的用户 SID 必须是当前登录用户。"
+    },
+    {
+      "id": "task.watch",
+      "layer": "守护",
+      "title": "计划任务 claude-setup-kit watch（每分钟）",
+      "check": "scheduled_task",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "name": "watch"
+      },
+      "next": "双击 installers\\win\\安装自检守护.cmd。"
+    },
+    {
+      "id": "task.ipv6",
+      "layer": "守护",
+      "title": "计划任务 claude-setup-kit ipv6-guard",
+      "check": "scheduled_task",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "name": "ipv6-guard"
+      },
+      "next": "双击 installers\\win\\安装IPv6守护.cmd。"
+    },
+    {
+      "id": "reg.edge",
+      "layer": "浏览器",
+      "title": "Edge 策略：WebRTC 禁非代理 UDP、DoH 关",
+      "check": "registry_policy",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "key": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
+        "app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        "label": "Edge"
+      },
+      "next": "双击 installers\\win\\Edge策略.reg 导入。"
+    },
+    {
+      "id": "tool.claude_wall_ps",
+      "layer": "体检",
+      "title": "claude-wall.ps1 体检脚本存在",
+      "check": "user_file",
+      "platforms": [
+        "win32"
+      ],
+      "args": {
+        "path": "%LOCALAPPDATA%/claude-setup-kit/claude-wall.ps1"
+      },
+      "next": "双击 installers\\win\\安装体检工具.cmd。"
     }
   ],
   "steps": [
@@ -652,5 +914,18 @@
       "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
       "say": "全部清单项都过了。最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图（上半页和滚到底的分数），我按四项记录交付。"
     }
-  ]
+  ],
+  "params_win": {
+    "clash_api": "pipe://verge-mihomo",
+    "clash_api_note": "Clash Verge on Windows serves the controller on the named pipe \\\\.\\pipe\\verge-mihomo; use http://127.0.0.1:<port> plus MIHOMO_SECRET if external-controller is set instead.",
+    "clash_runtime_config": "%APPDATA%/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml",
+    "tun_device": "Meta",
+    "network_services": [
+      "Ethernet"
+    ],
+    "network_services_note": "Windows adapter alias (InterfaceAlias), e.g. 以太网 / Ethernet / WLAN; set it in mirror.params.json.",
+    "system_dns_accept": [],
+    "chrome_app": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+  }
 }

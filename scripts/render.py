@@ -157,6 +157,10 @@ def render_component(name, values, out_dir):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        # Windows consoles default to GBK; the tables use ✅/❌ and Chinese.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--component", required=True, choices=sorted(COMPONENTS))
     ap.add_argument("--out", help="输出目录（必须不存在）；默认 build/<component>-<UTC 时间>")

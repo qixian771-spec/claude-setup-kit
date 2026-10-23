@@ -18,9 +18,10 @@ SKILL = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
 
 class CoverageTests(unittest.TestCase):
-    def test_runbook_names_every_component_id(self):
+    def test_runbook_names_every_macos_component_id(self):
         for comp in MANIFEST["components"]:
-            self.assertIn("`%s`" % comp["id"], RUNBOOK, comp["id"])
+            if "darwin" in comp.get("platforms", ["darwin"]):
+                self.assertIn("`%s`" % comp["id"], RUNBOOK, comp["id"])
 
     def test_runbook_steps_have_the_fixed_shape(self):
         steps = re.findall(r"^## (S\d+) ", RUNBOOK, re.M)

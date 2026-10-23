@@ -19,9 +19,16 @@ ROOT = Path(__file__).resolve().parent.parent
 PASS, FAIL, UNKNOWN, INFO, MANUAL = "PASS", "FAIL", "UNKNOWN", "INFO", "MANUAL"
 
 
-def load_manifest(path):
+def platform_key():
+    return "win32" if sys.platform.startswith("win") else sys.platform
+
+
+def load_manifest(path, platform="darwin"):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    ids = {c["id"] for c in data["components"]}
+    ids = {c["id"] for c in data["components"] if platform in c.get("platforms", ["darwin"])}
+    data["steps"] = data.get("steps_win" if platform == "win32" else "steps", [])
+    if not data["steps"]:
+        raise ValueError("manifest 还没有 %s 的步骤（Windows 步骤随 W6 提供；对账请直接用 mirror_check.py）" % platform)
     covered = set()
     for step in data["steps"]:
         for key in ("components", "manual", "info", "precheck"):
@@ -141,19 +148,27 @@ def render(out):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        # Windows consoles default to GBK; the tables use ✅/❌ and Chinese.
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", default=str(ROOT / "manifest.json"))
     ap.add_argument("--input", help="用已有的 mirror_check --json 输出文件，不重新检测")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-network", action="store_true", help="传给 mirror_check")
     ap.add_argument("--param", action="append", default=[], help="传给 mirror_check")
+    ap.add_argument("--platform", choices=("darwin", "win32"), help="（测试/CI 用）")
     args = ap.parse_args(argv)
     try:
-        manifest = load_manifest(args.manifest)
+        platform = args.platform or platform_key()
+        manifest = load_manifest(args.manifest, platform)
         if args.input:
             result = json.loads(Path(args.input).read_text(encoding="utf-8"))
         else:
             extra = (["--no-network"] if args.no_network else []) + [x for p in args.param for x in ("--param", p)]
+            if args.platform:
+                extra += ["--platform", args.platform]
             result = run_mirror_check(args.manifest, extra)
         out = decide(manifest, result)
     except (ValueError, RuntimeError, OSError, KeyError, TypeError) as exc:
