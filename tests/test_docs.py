@@ -117,3 +117,22 @@ class PackagingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProbeGuardPackagingTests(unittest.TestCase):
+    def test_static_guard_flags_probes_but_not_rule_tables_or_local_dns(self):
+        bad = "res=$(curl -s https://api.anthropic.com/)\nResolve-DnsName claude.ai\nnslookup claude.com 1.1.1.1\n"
+        self.assertEqual([n for n, _ in check.probe_guard_violations(bad)], [1, 2, 3])
+        ok = ("# curl https://claude.ai is only mentioned in this comment\n"
+              "res=$(/usr/bin/dig @127.0.0.1 +short api.anthropic.com A)\n"
+              "HOSTS = ('claude.ai', 'api.anthropic.com')\n"
+              "- DOMAIN-SUFFIX,anthropic.com,出口选择\n"
+              "Resolve-DnsName claude.ai -Server 127.0.0.1\n")
+        self.assertEqual(check.probe_guard_violations(ok), [])
+
+    def test_repo_passes_the_static_guard(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(check.main(), 0)
+        self.assertIn("anthropic-probe guard", out.getvalue())
+

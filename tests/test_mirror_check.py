@@ -859,3 +859,55 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProbeGuardTests(unittest.TestCase):
+    """Hard rule: never probe Anthropic/Claude hosts. The guard sits in Host.run / Host.ps and aborts the run."""
+
+    def test_refuses_network_tools_aimed_at_claude(self):
+        for argv in (["curl", "-sS", "https://api.anthropic.com/"], ["curl", "https://claude.ai/login"],
+                     ["nslookup", "claude.ai", "1.1.1.1"], ["dig", "api.anthropic.com", "A"],
+                     ["curl", "http://160.79.104.10/"], ["curl", "-6", "http://[2607:6bc0::10]/"], ["ping", "-c1", "claude.com"],
+                     ["curl.exe", "https://CLAUDE.APP"]):
+            with self.assertRaises(mc.ForbiddenProbe, msg=argv):
+                mc.assert_not_claude_probe(argv)
+
+    def test_allows_local_resolver_queries_and_unrelated_probes(self):
+        for argv in (["dig", "@127.0.0.1", "+short", "api.anthropic.com", "A"], ["nslookup", "claude.ai", "127.0.0.1"],
+                     ["curl", "-sS", "https://www.cloudflare.com/cdn-cgi/trace"], ["ls", "-la", "claude.ai"],
+                     ["cat", "/etc/pf.anchors/local.claude-direct-wall"], ["curl", "http://203.0.113.4/"]):
+            mc.assert_not_claude_probe(argv)
+
+    def test_powershell_snippets_are_guarded_too(self):
+        with self.assertRaises(mc.ForbiddenProbe):
+            mc.assert_not_claude_probe_ps("Resolve-DnsName api.anthropic.com | Select-Object IPAddress")
+        with self.assertRaises(mc.ForbiddenProbe):
+            mc.assert_not_claude_probe_ps("Test-NetConnection 160.79.104.10 -Port 443")
+        mc.assert_not_claude_probe_ps("Resolve-DnsName api.anthropic.com -Server 127.0.0.1")
+        mc.assert_not_claude_probe_ps("Get-NetFirewallRule | Where-Object DisplayName -like 'claude-setup-kit:*'")
+
+    def test_violation_aborts_the_whole_run_with_exit_2(self):
+        host = FakeHost()
+        real_run = host.run
+
+        def guarded_run(argv, timeout=20):
+            mc.assert_not_claude_probe(argv)  # mirror what mc.Host.run does before launching anything
+            return real_run(argv, timeout)
+        host.run = guarded_run
+        host.cmds[("curl", "-sS", "-m", "15", "https://www.cloudflare.com/cdn-cgi/trace")] = (0, "ip=1.1.1.1\nloc=US\n", "")
+        # Inject a forbidden probe through a check: monkeypatch the trace probe target.
+        original = mc.CHECKS["exit_ip"]
+
+        def bad_check(h, p, a):
+            h.run(["curl", "-sS", "https://api.anthropic.com/"])
+            return mc.PASS, ""
+        mc.CHECKS["exit_ip"] = bad_check  # the check table is bound at import time
+        try:
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code, _ = run(host, "--only", "net.exit_ip")
+            self.assertEqual(code, 2)
+            self.assertIn("硬规则", err.getvalue())
+        finally:
+            mc.CHECKS["exit_ip"] = original
+

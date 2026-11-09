@@ -47,6 +47,27 @@ def bash_path():
     return shell_path("bash")
 
 
+CLAUDE_DOMAINS = ("anthropic.com", "claude.ai", "claude.com", "claude.app", "claudeusercontent.com",
+                  "claudemcpcontent.com", "claudemcpclient.com", "clau.de")
+NET_VERB = re.compile(r"(\b(curl|wget|nslookup|dig|ping6?|nc|ncat|telnet|openssl|host|traceroute|Invoke-WebRequest|"
+                      r"Invoke-RestMethod|Test-NetConnection|Resolve-DnsName|urlopen|create_connection|http\.client|requests\.)\b|https?://)")
+LOCAL_RESOLVER = re.compile(r"@127\.0\.0\.1\b|(?<![\w.])127\.0\.0\.1(?![\w.])|-Server\s+127\.0\.0\.1")
+
+
+def probe_guard_violations(text):
+    """Lines that aim a network tool at an Anthropic/Claude domain (hard rule: no probes toward Anthropic).
+    A DNS query sent to the local Clash resolver (@127.0.0.1) is allowed: it never leaves the machine (fake-ip)."""
+    bad = []
+    for n, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "//", "REM ", "::")):
+            continue
+        low = line.lower()
+        if any(d in low for d in CLAUDE_DOMAINS) and NET_VERB.search(line) and not LOCAL_RESOLVER.search(line):
+            bad.append((n, stripped[:120]))
+    return bad
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -171,7 +192,20 @@ def main():
             text = path.read_text(encoding="utf-8")
             for bad in ("/Users/", "utun1024", "user 501"):
                 require(bad not in text, "%s 含机器相关值 %s" % (path.relative_to(ROOT), bad))
-    print("PASS: metadata, links, manifest coverage, syntax", counts)
+    # Hard rule: nothing in this kit may probe Anthropic/Claude hosts. Rule tables and docs may name the domains;
+    # executable code may only point a network tool at them via the local resolver.
+    guarded = 0
+    for path in sorted(set(list((ROOT / "scripts").glob("*.py")) + list((ROOT / "tools").glob("*.py"))
+                           + [p for p in (ROOT / "system").rglob("*") if p.is_file() and "vendor" not in p.parts and p.suffix in ("", ".sh", ".py")]
+                           + list((ROOT / "system-win").rglob("*.ps1")) + list((ROOT / "installers").rglob("*.sh"))
+                           + list((ROOT / "installers").glob("*.command")) + list((ROOT / "installers" / "win").glob("*.cmd")))):
+        if path.name == "check.py":
+            continue
+        hits = probe_guard_violations(path.read_text(encoding="utf-8-sig", errors="replace"))
+        require(not hits, "%s 向 Anthropic/Claude 地址发探测（硬规则禁止）: %s" % (path.relative_to(ROOT), hits))
+        guarded += 1
+    counts["probe-guard"] = guarded
+    print("PASS: metadata, links, manifest coverage, syntax, anthropic-probe guard", counts)
     for item in skipped:
         print("SKIPPED（明说，不是通过）: %s" % item)
     print("Operational scripts were not executed; mirror_check and installers are validated separately.")

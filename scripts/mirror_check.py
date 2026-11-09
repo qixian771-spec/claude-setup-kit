@@ -34,6 +34,52 @@ class HostError(Exception):
     """A query could not be made (missing tool, timeout, unreadable file)."""
 
 
+class ForbiddenProbe(Exception):
+    """Hard rule: this tool never sends a probe toward Anthropic/Claude hosts or networks. Not a HostError on purpose:
+    it must abort the whole run (exit 2), never degrade into a ❓."""
+
+
+CLAUDE_DOMAINS = ("anthropic.com", "claude.ai", "claude.com", "claude.app", "claudeusercontent.com",
+                  "claudemcpcontent.com", "claudemcpclient.com", "clau.de")
+CLAUDE_NETS = (ipaddress.ip_network("160.79.104.0/21"), ipaddress.ip_network("2607:6bc0::/32"))
+NET_TOOLS = {"curl", "curl.exe", "wget", "nslookup", "nslookup.exe", "dig", "host", "ping", "ping6", "ping.exe", "nc", "ncat",
+             "telnet", "openssl", "traceroute", "ssh", "python3", "python"}
+PS_NET_CMDLETS = re.compile(r"Invoke-WebRequest|Invoke-RestMethod|Test-NetConnection|Resolve-DnsName|Test-Connection|"
+                            r"\bcurl(\.exe)?\b|\bnslookup\b|\bwget\b|System\.Net\.", re.I)
+IP_LITERAL = re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])|\[?([0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7})\]?")
+
+
+def _targets_claude(text):
+    low = text.lower()
+    if any(d in low for d in CLAUDE_DOMAINS):
+        return True
+    for v4, v6 in IP_LITERAL.findall(text):
+        lit = v4 or v6
+        try:
+            addr = ipaddress.ip_address(lit)
+        except ValueError:
+            continue
+        if any(addr in net for net in CLAUDE_NETS):
+            return True
+    return False
+
+
+def assert_not_claude_probe(argv):
+    """Refuse to run a network tool aimed at Anthropic/Claude. A DNS query to the local Clash resolver
+    (dig @127.0.0.1 / nslookup … 127.0.0.1) is allowed: it never leaves this machine (fake-ip)."""
+    argv = [str(a) for a in argv]
+    if not argv or os.path.basename(argv[0]).lower() not in NET_TOOLS:
+        return
+    local = any(a in ("@127.0.0.1", "127.0.0.1", "localhost", "@localhost", "@::1", "::1") for a in argv[1:])
+    if not local and any(_targets_claude(a) for a in argv[1:]):
+        raise ForbiddenProbe("禁止向 Anthropic/Claude 地址探测（硬规则），已拒绝执行: %s" % " ".join(argv))
+
+
+def assert_not_claude_probe_ps(script):
+    if PS_NET_CMDLETS.search(script) and _targets_claude(script) and not re.search(r"127\.0\.0\.1|localhost", script):
+        raise ForbiddenProbe("禁止向 Anthropic/Claude 地址探测（硬规则），已拒绝执行 PowerShell 片段: %s" % script.strip()[:160])
+
+
 class NeedSudo(HostError):
     """A privileged query was refused; rerun with sudo."""
 
@@ -105,6 +151,7 @@ class Host:
         self.platform = platform_key()
 
     def run(self, argv, timeout=20):
+        assert_not_claude_probe(argv)
         self.calls.append(list(argv))
         try:
             # C locale: tools print English and /bin/sh (bash 3.2) parses scripts predictably.
@@ -204,6 +251,7 @@ class Host:
 
     def ps(self, script, tag=None, timeout=60):
         """Run a PowerShell snippet (UTF-8 output, errors stop); returns stdout. `tag` only names it for tests."""
+        assert_not_claude_probe_ps(script)
         prelude = "[Console]::OutputEncoding=[Text.Encoding]::UTF8\n$ProgressPreference='SilentlyContinue'\n$ErrorActionPreference='Stop'\n"
         encoded = base64.b64encode((prelude + script).encode("utf-16le")).decode("ascii")
         rc, out, err = self.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
@@ -978,7 +1026,11 @@ def main(argv=None, host=None):
         if unknown:
             ap.error("未知 id: %s" % sorted(unknown))
         comps = [c for c in comps if c["id"] in wanted]
-    items = [run_component(host, params, c, network=not args.no_network) for c in comps]
+    try:
+        items = [run_component(host, params, c, network=not args.no_network) for c in comps]
+    except ForbiddenProbe as exc:
+        print("[ERROR] 硬规则：%s" % exc, file=sys.stderr)
+        return 2
     code = exit_code(items)
     if args.json:
         print(json.dumps({"generated_utc": host.now().isoformat(), "manifest": args.manifest, "platform": host.platform,

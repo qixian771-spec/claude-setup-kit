@@ -92,7 +92,8 @@ check_armed() {
 }
 
 check_dns() {
-	res=$(/usr/bin/dig +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1)
+	# @127.0.0.1: ask the local Clash resolver (fake-ip) only — never the system or a public resolver (hard rule: no probes toward Anthropic)
+	res=$(/usr/bin/dig @127.0.0.1 +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1)
 	if [ -z "$res" ]; then
 		echo "警报: api.anthropic.com 无解析（DNS 链断裂）" >&2
 		return 3
@@ -197,7 +198,7 @@ cmd_show() {
 	fi
 	echo
 	if check_dns; then
-		echo "DNS: api.anthropic.com → $(/usr/bin/dig +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1) (fake-ip 正常)"
+		echo "DNS: api.anthropic.com → $(/usr/bin/dig @127.0.0.1 +short +time=2 +tries=1 api.anthropic.com A 2>/dev/null | /usr/bin/head -1) (fake-ip 正常)"
 	else
 		dns_rc=$?
 		[ "$rc" = 0 ] && rc=$dns_rc

@@ -60,3 +60,11 @@
 **参考机已迁移（2026-10-23 09:56）**：用户双击 `installers/迁移IPv6守护.command`，EXIT=0，守护改为执行 root 持有的 `/usr/local/libexec/ipv6-guard.sh`，全量对账 ✅36 ❌0。这是迁移脚本的首次真机运行。
 | W14 | **Opus 收尾复核 76 分**，剩余全部修：助手 `persist` 不再收任意规则文本，改为只收精确主机地址、由助手自己改写现有规则文件的 table 行（删掉 `check`）；anchor 白名单只剩本套件三个、`table-add` 的 anchor/表固定、地址只收精确主机（不收网段/主机名）、`kill` 同；`ipv6.script` 改为读 label 对应 plist 里真正执行的程序并校验属主/权限/链接与日志路径，删掉可绕过的 `ipv6_guard_script` 参数；`提权对账.command` 先以用户身份带网络跑一次、再 root 不带网络跑一次、合并（root ❓ 时取用户结果），跳过 S5 不再死循环；迁移脚本先做全部前置检查、备份到 `/var/db/ipv6-guard-migrate-*`、确认旧脚本是 IPv6 守护后才卸；锁目录 700；`/usr/local/libexec` 属主与权限校验 | 本提交；155 例；助手坏参数 16 种实测全拒；Mac 实跑合并版提权对账 → 35 ✅ ❓ 0，唯一 ❌ 为参考机旧守护（待迁移）；Win 155 例 OK |
 | W15 | **Opus 终核 82 分**，3 条必修 + 零碎：助手地址校验改用 `ipaddress`（拒 `1.2.3.4.5`、`999.…`、`::`、回环/组播/链路本地）；`persist` 只增不减（旧 table 行里的地址必须都在新列表）、失败清理临时与 staging 文件；`check_daemon_program` 逐级校验上级目录属主/权限/链接、日志只允许 `/var/log` `/Library/Logs`、拒 `..`、拒 `Program`/`-c`/相对参数、plist 顶层非字典时干净 ❌；`common.sh` 新增 `assert_root_dir`，六个往 `/usr/local/libexec` 写 root 程序的安装器都在写任何东西之前校验目录链；更新器删掉无效的并发检查；提权对账打印两次各自的退出码 | 本提交；156 例；助手 11 种地址实测（坏的全拒、Anthropic 真地址与文档地址通过）；Mac 实跑合并版提权对账 35 ✅ ❓ 0 |
+
+## 0.3.0 硬规则闸门（W16，2026-11-09）
+
+| 卡 | 内容 | 状态 |
+| --- | --- | --- |
+| W16 | 「不向 Anthropic/Claude 地址探测」从文字规则变成机器闸门：(1) `mirror_check` 运行时——`Host.run`/`Host.ps` 启动任何网络工具或 PowerShell 片段前先检查目标，命中 Anthropic/Claude 域名或 IP 段（160.79.104.0/21、2607:6bc0::/32）就抛 `ForbiddenProbe`，整轮以 2 退出，不会降级成 ❓；唯一放行的是向本机 Clash 解析器 `@127.0.0.1` 查 fake-ip；(2) `tools/check.py` 静态——扫描 64 个可执行文件，任何一行把网络工具指向这些域名就 FAIL，规则表/文档/注释不算；(3) `claude-wall` 的两处 `dig api.anthropic.com` 改为 `dig @127.0.0.1`，不再经过系统解析器 | 本提交；162 例；Mac 真机：三种禁止目标在发出请求前被拒、`calls` 为空，本机解析器查询返回 fake-ip；`claude-wall status` 照常 |
+
+起因：2026-11-09 另一个会话在 T4 测试时经 204 匿名访问过一次 api.anthropic.com（401），违反老公的硬规则。
