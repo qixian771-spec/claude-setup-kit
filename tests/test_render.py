@@ -202,18 +202,35 @@ class ComponentTests(RenderFixture):
         # NODE3 (socks5) is optional: without NODE3_* the proxy block and both group members disappear and nothing
         # is left unrendered; with it, the socks5 proxy is present. START.md promises exactly this.
         keys = {k for k in render.PLACEHOLDER.findall((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8")) if k.startswith("NODE")}
-        two = {k: "v-" + k.lower() for k in keys if not k.startswith("NODE3_")}
+        two = {k: "v-" + k.lower() for k in keys if not k.startswith(("NODE3_", "NODE4_"))}
         text = render.render_text((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8"), dict(self.values(), **two), "t")
         self.assertNotIn("{{", text)
         self.assertNotIn("v-node3", text)
         self.assertNotIn("type: socks5", text)
         self.assertNotIn("ENDIF", text.split("\nmixed-port", 1)[1])  # markers never survive into the YAML body
         self.assertEqual(text.count("- 'v-node2_name'"), 2)
-        three = {k: "v-" + k.lower() for k in keys}
+        self.assertNotIn("xhttp", text.split("\nmixed-port", 1)[1])
+        three = {k: "v-" + k.lower() for k in keys if not k.startswith("NODE4_")}
         text3 = render.render_text((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8"), dict(self.values(), **three), "t")
         self.assertIn("type: socks5", text3)
         self.assertEqual(text3.count("- 'v-node3_name'"), 2)
         self.assertNotIn("{{IF", text3)
+
+    def test_optional_cdn_node_joins_only_the_exit_group(self):
+        # NODE4 (Cloudflare CDN entry to NODE1's server, VLESS+XHTTP+TLS) is optional, goes into the exit group as a
+        # standby member and never into the Google group; the domain feeds both servername and xhttp host.
+        keys = {k for k in render.PLACEHOLDER.findall((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8")) if k.startswith("NODE")}
+        four = {k: "v-" + k.lower() for k in keys}
+        text = render.render_text((ROOT / "templates/clash-profile.template.yaml").read_text(encoding="utf-8"), dict(self.values(), **four), "t")
+        self.assertNotIn("{{", text)
+        self.assertIn("network: xhttp", text)
+        self.assertIn("servername: 'v-node4_host'", text)
+        self.assertIn("host: 'v-node4_host'", text)
+        self.assertIn("path: 'v-node4_path'", text)
+        groups = text.split("\nproxy-groups:", 1)[1]
+        exit_block, google_block = groups.split("- name: '%s'" % self.values()["GOOGLE_GROUP"], 1)
+        self.assertIn("- 'v-node4_name'", exit_block)
+        self.assertNotIn("- 'v-node4_name'", google_block)
 
     def test_failed_render_leaves_no_output_directory(self):
         out = self.root / "half"

@@ -343,6 +343,28 @@ def check_clash_api(host, p, a):
     return PASS, "mihomo %s（%s）" % (data.get("version"), p["clash_api"])
 
 
+def _version_tuple(text):
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", str(text))
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def check_xhttp_core(host, p, a):
+    """A profile with an XHTTP node (optional NODE4, the Cloudflare CDN backup entry) needs a mihomo core new enough
+    to know `network: xhttp`; an old core refuses the whole profile and the user sees nothing but a load failure."""
+    text = host.read_text(expand(host, p["clash_runtime_config"]))
+    uses_xhttp = bool(re.search(r"^\s*network:\s*xhttp\s*$", text, re.M))
+    version = host.api(p["clash_api"], "/version").get("version")
+    have, need = _version_tuple(version), _version_tuple(p["xhttp_min_core"])
+    if not uses_xhttp:
+        return INFO, "当前配置没有 XHTTP 节点（可选的 NODE4 未用）；核心 %s" % version
+    if have is None:
+        return FAIL, "读不出核心版本（%r），无法确认是否支持 XHTTP" % version
+    if have < need:
+        return FAIL, "配置里有 XHTTP 节点，但核心 %s 低于实测支持的 %s：整份配置会加载失败——先升级 Clash Verge（内核 ≥ %s），或先去掉 NODE4" % (
+            version, p["xhttp_min_core"], p["xhttp_min_core"])
+    return PASS, "XHTTP 节点存在，核心 %s ≥ %s" % (version, p["xhttp_min_core"])
+
+
 def check_clash_mode(host, p, a):
     mode = host.api(p["clash_api"], "/configs").get("mode")
     expect = a.get("expect", "rule")

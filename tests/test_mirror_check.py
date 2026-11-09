@@ -911,3 +911,24 @@ class ProbeGuardTests(unittest.TestCase):
         finally:
             mc.CHECKS["exit_ip"] = original
 
+
+class XhttpCoreTests(unittest.TestCase):
+    def test_no_xhttp_node_is_only_recorded(self):
+        _, items, _ = run_json(FakeHost(), "--only", "clash.xhttp_core")
+        self.assertEqual(items["clash.xhttp_core"]["status"], mc.INFO)
+
+    def test_xhttp_node_needs_a_new_enough_core(self):
+        host = FakeHost()
+        key = next(k for k in host.files if k.endswith("clash-verge.yaml"))
+        host.files[key] = RUNTIME_CONFIG + "\nproxies:\n- name: cdn\n  type: vless\n  network: xhttp\n"
+        host.apis["/version"] = {"meta": True, "version": "v1.19.17"}  # Clash Verge 2.4.4 (Windows) — no XHTTP
+        _, items, _ = run_json(host, "--only", "clash.xhttp_core")
+        self.assertEqual(items["clash.xhttp_core"]["status"], mc.FAIL)
+        self.assertIn("升级 Clash Verge", items["clash.xhttp_core"]["evidence"])
+        host.apis["/version"] = {"meta": True, "version": "v1.19.29"}
+        _, items, _ = run_json(host, "--only", "clash.xhttp_core")
+        self.assertEqual(items["clash.xhttp_core"]["status"], mc.PASS)
+        host.apis["/version"] = {"meta": True, "version": "alpha-g1234"}
+        _, items, _ = run_json(host, "--only", "clash.xhttp_core")
+        self.assertEqual(items["clash.xhttp_core"]["status"], mc.FAIL)  # unknown version: do not guess
+

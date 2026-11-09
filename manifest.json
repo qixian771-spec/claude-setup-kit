@@ -12,6 +12,8 @@
   "params": {
     "clash_api": "unix:///tmp/verge/verge-mihomo.sock",
     "clash_runtime_config": "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml",
+    "xhttp_min_core": "1.19.29",
+    "xhttp_min_core_note": "Oldest mihomo observed to load a `network: xhttp` proxy (Clash Verge 2.4.4 ships 1.19.17, which does not). Only matters when the optional NODE4 CDN entry is rendered.",
     "tun_device": "utun1024",
     "tun_inet4": "198.18.0.1",
     "fake_ip_prefix": "198.18.0.0/16",
@@ -136,6 +138,18 @@
         "win32"
       ],
       "next_win": "打开 Clash Verge（Windows 版控制通道是命名管道 \\\\.\\pipe\\verge-mihomo；核心没运行就连不上）。"
+    },
+    {
+      "id": "clash.xhttp_core",
+      "layer": "代理",
+      "title": "用了 XHTTP 备用节点（NODE4）时，核心版本支持 XHTTP",
+      "check": "xhttp_core",
+      "next": "配置里有 network: xhttp 而核心太旧：让用户升级 Clash Verge 到内核 ≥ params.xhttp_min_core 的版本后重新导入；不想升级就渲染时不给 NODE4_*。没有 NODE4 时本项只记录。",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next_win": "Clash Verge 2.4.4 的内核 1.19.17 不支持 XHTTP：先让用户升级 Clash Verge（Windows 版），再导入带 NODE4 的配置；或者渲染时不给 NODE4_*。"
     },
     {
       "id": "clash.base_config",
@@ -775,6 +789,7 @@
       "title": "Clash Verge：固定出口与 fake-ip DNS",
       "components": [
         "clash.core",
+        "clash.xhttp_core",
         "clash.base_config",
         "clash.mode",
         "clash.tun",
@@ -996,6 +1011,7 @@
       "title": "Clash Verge（Windows）：固定出口与 fake-ip DNS",
       "components": [
         "clash.core",
+        "clash.xhttp_core",
         "clash.base_config",
         "clash.mode",
         "clash.tun",

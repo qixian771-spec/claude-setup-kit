@@ -68,3 +68,11 @@
 | W16 | 「不向 Anthropic/Claude 地址探测」从文字规则变成机器闸门：(1) `mirror_check` 运行时——`Host.run`/`Host.ps` 启动任何网络工具或 PowerShell 片段前先检查目标，命中 Anthropic/Claude 域名或 IP 段（160.79.104.0/21、2607:6bc0::/32）就抛 `ForbiddenProbe`，整轮以 2 退出，不会降级成 ❓；唯一放行的是向本机 Clash 解析器 `@127.0.0.1` 查 fake-ip；(2) `tools/check.py` 静态——扫描 64 个可执行文件，任何一行把网络工具指向这些域名就 FAIL，规则表/文档/注释不算；(3) `claude-wall` 的两处 `dig api.anthropic.com` 改为 `dig @127.0.0.1`，不再经过系统解析器 | 本提交；162 例；Mac 真机：三种禁止目标在发出请求前被拒、`calls` 为空，本机解析器查询返回 fake-ip；`claude-wall status` 照常 |
 
 起因：2026-11-09 另一个会话在 T4 测试时经 204 匿名访问过一次 api.anthropic.com（401），违反老公的硬规则。
+
+## 0.4.0 CDN 备用入口（W17，2026-11-09）
+
+| 卡 | 内容 | 状态 |
+| --- | --- | --- |
+| W17 | 模板加可选 `NODE4`（经 Cloudflare CDN 进 NODE1 同一台机器的 VLESS+XHTTP+TLS 备用入口：`NODE4_NAME/SERVER/PORT/UUID/HOST/PATH`），只进「出口选择」当备用成员、不进 Google 分组、不选中；新组件 `clash.xhttp_core`（配置里有 `network: xhttp` 而内核低于实测支持的 1.19.29 就 ❌ 并指向升级 Clash Verge，没有 NODE4 只记录）；`references/cdn-backup.md` 通用搭建手册（独立 xray 进程、Let's Encrypt、只放行 Cloudflare 段、优选 IP、验收表、风险；不含任何私人参数）；START 写明 NODE4 键名与两条铁规；组件数 Mac 39 / Win 28 / 共 46 | 本提交；四节点与两节点渲染都过本机 mihomo 1.19.29 `-t`；对账三态有测试；本机只读对账 ℹ️（未用 NODE4） |
+
+**没碰的东西**：这台 Mac 与 Win 上正在运行的 Clash 配置、分组选择、规则一律未改；参考机的 CDN 节点参数未进仓库。

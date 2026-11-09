@@ -91,7 +91,7 @@ class WindowsBaselineTests(unittest.TestCase):
         self.assertEqual(m["params"]["tun_device"], "Meta")
         self.assertEqual(m["params"]["clash_api"], "pipe://verge-mihomo")
         self.assertEqual(m["platform"], "win32")
-        self.assertEqual(len(m["components"]), 27)
+        self.assertEqual(len(m["components"]), 28)
 
     def test_reference_windows_passes_everything(self):
         code, items, data = run_json(WinHost())

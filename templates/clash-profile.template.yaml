@@ -1,7 +1,8 @@
 # claude-setup-kit — Clash Verge 本地配置模板（照参考机 2026-10-23 现状，节点全部换成占位符）
 # 渲染：python3 scripts/render.py --component clash --nodes <你的节点参数.json>；或手工把双花括号占位符换成真实值。
-# 节点：NODE1（VLESS-REALITY，Claude 出口）和 NODE2（trojan，Google 出口）必填；NODE3（socks5）可选——不给 NODE3_* 时，
-#   render.py 会整个去掉 NODE3 的代理和分组成员（靠下面 "# IF NODE3_NAME" / "# ENDIF" 形式的条件标记）。
+# 节点：NODE1（VLESS-REALITY，Claude 出口）和 NODE2（trojan，Google 出口）必填；NODE3（socks5）和 NODE4（经 Cloudflare CDN
+#   进 NODE1 同一台机器的 XHTTP 备用入口）可选——不给对应的键时，render.py 会整个去掉它们的代理和分组成员
+#   （靠下面 "# IF NODEn_NAME" / "# ENDIF" 形式的条件标记）。NODE4 只进 EXIT_GROUP 当备用成员、不选中。
 # 导入 Clash Verge 后，脚本 templates/clash-profile.script.js 可选：模板里已有同样的 DNS 段和 STUN 拦截规则。
 # 分组：EXIT_GROUP 是 Claude 的固定出口（成员不许有 DIRECT）；GOOGLE_GROUP 只给 Google 系域名用，
 #   成员是主出口以外的节点——Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"，
@@ -144,6 +145,24 @@ proxies:
   password: '{{NODE3_PASSWORD}}'
   udp: false  # 参考机的住宅 socks5 不支持 UDP；确认你的支持再改成 true
 # {{ENDIF}}
+# {{IF NODE4_NAME}}
+# NODE4：经 Cloudflare CDN 进入 NODE1 同一台服务器的备用入口（VLESS + XHTTP + TLS）。server 填 Cloudflare 优选 IP，
+#   域名只放在 servername / host 里。平时不选中，只在直连入口被墙时手动切换；需要 mihomo ≥ 1.19.29（clash.xhttp_core 会查）。
+- name: '{{NODE4_NAME}}'
+  type: vless
+  server: '{{NODE4_SERVER}}'
+  port: {{NODE4_PORT}}
+  uuid: '{{NODE4_UUID}}'
+  network: xhttp
+  tls: true
+  udp: false
+  servername: '{{NODE4_HOST}}'
+  client-fingerprint: chrome
+  xhttp-opts:
+    host: '{{NODE4_HOST}}'
+    path: '{{NODE4_PATH}}'
+    mode: auto
+# {{ENDIF}}
 proxy-groups:
 - name: '{{EXIT_GROUP}}'
   type: select
@@ -151,6 +170,7 @@ proxy-groups:
   - '{{NODE1_NAME}}'
   - '{{NODE2_NAME}}'
   - '{{NODE3_NAME}}'  # {{IF NODE3_NAME}}
+  - '{{NODE4_NAME}}'  # {{IF NODE4_NAME}}
 - name: '{{GOOGLE_GROUP}}'
   type: select
   proxies:

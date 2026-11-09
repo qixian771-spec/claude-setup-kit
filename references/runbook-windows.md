@@ -1,6 +1,6 @@
 # 执行手册（Windows 10/11）：把一台 Windows 配成参考机的等价物
 
-与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts/mirror_check.py --only <id>` 的输出原文；`py -3 scripts/next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（27 个），`mirror_check` 在 Windows 上自动只跑这些。
+与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts/mirror_check.py --only <id>` 的输出原文；`py -3 scripts/next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（28 个），`mirror_check` 在 Windows 上自动只跑这些。
 
 执行主体是 AI；👤 的动作由用户做（双击 `.cmd`/`.reg`、UAC 点"是"、在 Clash Verge / 设置里点、截图）。所有 `.cmd` 都把输出写到 `installers\logs\<名字>-<随机>.log`，最后一行 `EXIT=`。
 
@@ -43,6 +43,7 @@ foreach ($n in '一键安装全部', '一键撤回全部') { $l = $sh.CreateShor
 | `git clone` 报 `Connection was reset` / `Failed to connect to github.com` | 没有代理时国内连不上 GitHub（实测关 TUN 后两次失败、curl 15 秒超时） | 先在 Clash Verge 开系统代理再克隆；没有任何代理的机器让用户在别的设备 Download ZIP 拷过来 |
 | `mirror_check` 的 `dns.system`/`net.ipv6_off` 变 ❓ 并吐一段 CIM 错误 | `network_services` 还是默认的 `Ethernet`，中文系统网卡叫 `以太网` | 现在会直接报"网卡不存在（有: …）"；把 `网络连接` 里的名字写进 `mirror.params.json` |
 | 在 PowerShell 里跑 `py -3 tools\check.py` 或测试报 `FileNotFoundError` | PATH 里的 `bash` 是 System32 的 WSL 启动器，Git 没进 PATH | 现在会自动找 Git 自带的 bash；找不到就明说"跳过 sh 语法检查"（这两样是开发者工具，配机流程不需要跑） |
+| 导入带 NODE4（XHTTP 备用入口）的配置后 Clash Verge 报加载失败 | 内核 1.19.17（Clash Verge 2.4.4）不认 `network: xhttp` | `clash.xhttp_core` 会先报；升级 Clash Verge 或渲染时不给 NODE4_* |
 | 游戏机装了雷神/迅游（WFP 驱动常驻） | 驱动在但加速器不运行时不影响 TUN 和防火墙规则 | 实验期间不开加速器；要打游戏前一键撤回、关 TUN |
 
 ## G0 约束表
@@ -60,16 +61,16 @@ py -3 scripts/mirror_check.py --no-network
 
 ## S1 Clash Verge（Windows）
 
-组件：`clash.core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录：实测 Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器的 DNS，真实路径由 TUN 劫持 53 保证，见 `dns.local53`）。
+组件：`clash.core clash.xhttp_core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录：实测 Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器的 DNS，真实路径由 TUN 劫持 53 保证，见 `dns.local53`）。
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
 2. AI：`py -3 scripts/render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
 3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；点这张卡设为当前（脚本 `clash-profile.script.js` **可选**，模板已带同样的 DNS 与 STUN 规则）；设置里系统代理开、DNS 覆写关；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
-4. 对账：`py -3 scripts/mirror_check.py --only clash.core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
+4. 对账：`py -3 scripts/mirror_check.py --only clash.core,clash.xhttp_core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
 
 控制通道：Windows 版 Clash Verge 在命名管道 `\\.\pipe\verge-mihomo`（`params_win.clash_api`）；若用户另设了 `external-controller`，用 `--param clash_api=http://127.0.0.1:<端口>` 并设环境变量 `MIHOMO_SECRET`。TUN 适配器默认名 `Meta`（`params_win.tun_device`）。
 
-停止：`clash.core` ❓ = 核心没跑/管道名不同；`net.tun_iface` ❌ = TUN 没开。**S2 之前这些必须 ✅，否则防火墙规则会把本机断网**（安装器也会拒装）。
+停止：`clash.core` ❓ = 核心没跑/管道名不同；`clash.xhttp_core` ❌ = 带 NODE4（XHTTP）的配置遇到旧内核（Clash Verge 2.4.4 = mihomo 1.19.17，实测不支持），先升级 Clash Verge 或不给 NODE4；`net.tun_iface` ❌ = TUN 没开。**S2 之前这些必须 ✅，否则防火墙规则会把本机断网**（安装器也会拒装）。
 
 ## S2 防火墙三套规则
 
@@ -141,7 +142,7 @@ py -3 scripts/mirror_check.py --no-network
 | id | 步 | 安装器 / 动作 |
 |---|---|---|
 | `os` | G1 | — |
-| `clash.core` `clash.base_config` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
+| `clash.core` `clash.xhttp_core` `clash.base_config` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI（服务模式 + TUN） |
 | `wf.enabled` `wf.011` `wf.020` | S2 | `一键安装全部.cmd`（S2–S7 一次装完）或 `安装防火墙规则.cmd` |
 | `task.watch` `watch.fresh` | S3 | `安装自检守护.cmd` |
 | `net.ipv6_off` `task.ipv6` | S4 | `安装IPv6守护.cmd` |

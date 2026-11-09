@@ -1,6 +1,6 @@
 # 执行手册：把一台 Mac 配成参考机
 
-流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 38 个在附录 B 对照表里。
+流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 39 个在附录 B 对照表里。
 
 执行主体是 AI；只有标了 👤 的动作要用户亲自做（双击 `.command`、输密码、在 Clash Verge / 系统设置里点按钮、截图）。AI 渲染、读日志、对账、交付。
 
@@ -37,7 +37,7 @@
 
 ## S1 Clash Verge
 
-进入：G1 完成；用户有节点参数（至少两个：Claude 主出口 + 一个给 Google 用的）。组件：`clash.core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53 dns.system`。
+进入：G1 完成；用户有节点参数（至少两个：Claude 主出口 + 一个给 Google 用的；可选第四个：经 Cloudflare CDN 进主出口同一台机器的 XHTTP 备用入口，做法见 [cdn-backup.md](cdn-backup.md)）。组件：`clash.core clash.xhttp_core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53 dns.system`。
 
 动作：
 1. 👤 安装 Clash Verge（参考机 2.5.2，核心 mihomo v1.19.29），打开一次，**设置 → 服务模式 安装**（TUN 需要）。
@@ -46,11 +46,11 @@
 3. 👤 Clash Verge → 配置（订阅）→ 新建 → 类型 Local → 导入渲染的 yaml → 点这张卡设为当前。脚本 `clash-profile.script.js` **可选**：模板里已经有一模一样的 DNS 段和 STUN 拦截规则。**不要用手写 profiles.yaml 的方式注册配置卡**（实测 Clash Verge 能选中但不会用它的内容）。
 4. 👤 设置：开 TUN 模式、系统代理开、DNS 覆写关（脚本已写 DNS）；代理页把 `出口选择` 选到出口节点。
 4b. 👤 代理页把 `Google出口` 选成**主出口以外**的节点（参考机用韩国节点）。为什么：Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Google 走另一个节点，Claude 的出口不动，`storage.googleapis.com`/`fonts.*` 这些 Claude 要用的仍走主出口（规则顺序已在模板里排好）。
-5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
+5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.xhttp_core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
 
 读：十一项全 ✅。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；S1 配置阶段允许退出 Clash Verge（托盘里退出）删掉这几段再开——这是"不退出 Clash"硬规则唯一的例外，只在还没开始用 Claude 时做。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
 
-停止：`clash.core` ❓ = 核心没起/控制 socket 路径不同（`--param clash_api=`）；`clash.exit` ❌ = 分组里有 DIRECT 或没选到节点，先在 GUI 改；`clash.rules`/`clash.dns` ❌ = 导入的不是渲染文件或脚本没绑定。不进 S4 之前这些必须 ✅——**S4 的墙会把没走 TUN 的公网全部拦掉**。
+停止：`clash.core` ❓ = 核心没起/控制 socket 路径不同（`--param clash_api=`）；`clash.xhttp_core` ❌ = 配置里有 NODE4（XHTTP）但内核太旧，整份配置都不会加载——让用户升级 Clash Verge 或先不给 NODE4；`clash.exit` ❌ = 分组里有 DIRECT 或没选到节点，先在 GUI 改；`clash.rules`/`clash.dns` ❌ = 导入的不是渲染文件或脚本没绑定。不进 S4 之前这些必须 ✅——**S4 的墙会把没走 TUN 的公网全部拦掉**。
 
 ## S2 Claude 直连墙（010）
 
@@ -188,7 +188,7 @@
 | id | 步 | 安装器 / 动作 |
 |---|---|---|
 | `os` | G1 | — |
-| `clash.core` `clash.base_config` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI |
+| `clash.core` `clash.xhttp_core` `clash.base_config` `clash.mode` `clash.tun` `clash.exit` `clash.rules` `clash.google_exit` `clash.dns` `net.tun_iface` `dns.local53` `dns.system` | S1 | `render.py --component clash` + Clash Verge GUI |
 | `pf.enabled` `pf.010` `loader.010` `daemon.010` `pf.conf` | S2 | `安装Claude直连墙.command` |
 | `pf.011` `loader.011` `daemon.011` | S3 | `安装Anthropic整段墙.command` |
 | `pf.020` `loader.020` `daemon.020` | S4 | `安装防泄露墙.command` |
