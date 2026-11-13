@@ -76,3 +76,10 @@
 | W17 | 模板加可选 `NODE4`（经 Cloudflare CDN 进 NODE1 同一台机器的 VLESS+XHTTP+TLS 备用入口：`NODE4_NAME/SERVER/PORT/UUID/HOST/PATH`），只进「出口选择」当备用成员、不进 Google 分组、不选中；新组件 `clash.xhttp_core`（配置里有 `network: xhttp` 而内核低于实测支持的 1.19.29 就 ❌ 并指向升级 Clash Verge，没有 NODE4 只记录）；`references/cdn-backup.md` 通用搭建手册（独立 xray 进程、Let's Encrypt、只放行 Cloudflare 段、优选 IP、验收表、风险；不含任何私人参数）；START 写明 NODE4 键名与两条铁规；组件数 Mac 39 / Win 28 / 共 46 | 本提交；四节点与两节点渲染都过本机 mihomo 1.19.29 `-t`；对账三态有测试；本机只读对账 ℹ️（未用 NODE4） |
 
 **没碰的东西**：这台 Mac 与 Win 上正在运行的 Clash 配置、分组选择、规则一律未改；参考机的 CDN 节点参数未进仓库。
+
+## 0.5.0 桌面端更新策略与 Persona 分流补齐（W18，2026-11-12）
+
+| 卡 | 内容 | 状态 |
+| --- | --- | --- |
+| W18 | 配合 `claude-client-full-reset` 的更新包静态审计落地三项：(1) Clash 模板与覆写脚本补齐 `withpersona.com`、`persona.com`、`stripe.network`、`workos.com`、Statsig 伪装后缀与 `challenges.cloudflare.com`（规则 111 → 116，防止实名验证、刷卡反欺诈信标与外部登录跳转跟主会话出口不一致）；(2) 新增可选安装器 `installers/Claude禁自动更新.mobileconfig`（macOS MDM 受管 `disableAutoUpdates=true`）与 `installers/win/Claude禁自动更新.reg` / `卸载Claude禁自动更新.reg`（Windows `HKLM\SOFTWARE\Policies\Claude`）；(3) 新组件 `desktop.updater`（Mac/Win 双端，默认 `desktop_block_updates_required: false` 输出 ℹ️，识别 UTF-8 JSON 格式 `ShipItState.plist` 与挂起任务、识别 `claude_desktop_config.json` 误写，要求 AI 先调 `desktop_update_audit.py` 向用户说明**此次更新包内容 + 结合本机情况判断**后再按推荐项二选一简单询问是否开启可选禁自动更新；用户明确要锁时设 `desktop_block_updates_required: true` 才判 ✅/❌）；组件数 Mac 40 / Win 29 / 共 47 | 本提交；双端夹具测试与 Mac 真机只读对账通过，运行中的 Claude 与 ShipIt 未碰 |
+| W19 | 外部用户实测反馈修复（Google 智能按需分流 + 全协议节点渲染）：(1) `clash.google_exit` 改为智能按需（默认 `google_split_required: false`）：只有主出口被 Google 误判中国（送中）且有第 2 节点时才需拆分 `Google出口`（记 ✅）；单节点或主出口未送中时支持无 `Google出口` 或与主出口共用（记 ℹ️ 放行），同时继续严格拦截 Google 走 `DIRECT` 或规则顺序错乱；(2) `render.py` 与 `clash-profile.template.yaml` 支持单节点（省略 `NODE2_*`）及任意 Clash 协议（`NODE1_TYPE`–`NODE3_TYPE` 支持 `vless`/`trojan`/`ss`/`socks5`/`vmess`/`hysteria2`/`tuic`/`anytls`，或 `NODE1_PROXY`–`NODE3_PROXY` 直接传原样节点对象），保留 Claude 主出口固定不切、禁 `DIRECT` 的硬规则 | 本提交；170 项单测与 `ruamel.yaml` 语法校验通过 |

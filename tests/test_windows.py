@@ -91,7 +91,7 @@ class WindowsBaselineTests(unittest.TestCase):
         self.assertEqual(m["params"]["tun_device"], "Meta")
         self.assertEqual(m["params"]["clash_api"], "pipe://verge-mihomo")
         self.assertEqual(m["platform"], "win32")
-        self.assertEqual(len(m["components"]), 28)
+        self.assertEqual(len(m["components"]), 29)
 
     def test_reference_windows_passes_everything(self):
         code, items, data = run_json(WinHost())
@@ -215,6 +215,36 @@ class WindowsFailureTests(unittest.TestCase):
         del host.stats[HOME + "\\AppData\\Local\\claude-setup-kit\\claude-wall.ps1"]
         _, items, _ = run_json(host, "--only", "tool.claude_wall_ps")
         self.assertIn("不存在", items["tool.claude_wall_ps"]["evidence"])
+
+    def test_desktop_updater_optional_and_required_modes(self):
+        host = WinHost()
+        # Not installed -> INFO
+        _, items, _ = run_json(host, "--only", "desktop.updater")
+        self.assertEqual(items["desktop.updater"]["status"], mc.INFO)
+        self.assertIn("未安装", items["desktop.updater"]["evidence"])
+
+        # Installed, unlocked, with misplaced claude_desktop_config.json + retry banner -> INFO by default
+        app_exe = HOME + "\\AppData\\Local\\AnthropicClaude\\Claude.exe"
+        host.stats[app_exe] = Stat(0, 0o100644)
+        cfg_json = HOME + "\\AppData\\Roaming\\Claude\\config.json"
+        mis_json = HOME + "\\AppData\\Roaming\\Claude\\claude_desktop_config.json"
+        host.stats[cfg_json] = Stat(0, 0o100644)
+        host.stats[mis_json] = Stat(0, 0o100644)
+        host.files[cfg_json] = json.dumps({"updaterFailedInstall": True})
+        host.files[mis_json] = json.dumps({"disableAutoUpdates": True})
+        _, items, _ = run_json(host, "--only", "desktop.updater")
+        self.assertEqual(items["desktop.updater"]["status"], mc.INFO)
+        self.assertIn("desktop_update_audit.py", items["desktop.updater"]["evidence"])
+        self.assertIn("不生效", items["desktop.updater"]["evidence"])
+
+        # User opts into locking auto-updates -> FAIL until policy is set
+        _, items, _ = run_json(host, "--only", "desktop.updater", "--param", "desktop_block_updates_required=true")
+        self.assertEqual(items["desktop.updater"]["status"], mc.FAIL)
+
+        # Policy installed -> PASS when required
+        host.ps_outputs["reg-Claude"] = json.dumps({"disableAutoUpdates": 1})
+        _, items, _ = run_json(host, "--only", "desktop.updater", "--param", "desktop_block_updates_required=true")
+        self.assertEqual(items["desktop.updater"]["status"], mc.PASS)
 
 
 class PlumbingTests(unittest.TestCase):

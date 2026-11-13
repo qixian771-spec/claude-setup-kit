@@ -18,7 +18,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 try:
     import pwd  # Unix only
@@ -445,21 +445,32 @@ def check_clash_base_config(host, p, a):
 
 def check_clash_google_exit(host, p, a):
     group = p["google_group"]
+    required = bool(p.get("google_split_required"))
+    rules = host.api(p["clash_api"], "/rules").get("rules") or []
+    direct_leaks = [
+        "%s 走 DIRECT" % r.get("payload")
+        for r in rules
+        if r.get("type") in ("DomainSuffix", "Domain")
+        and r.get("payload") in p["google_suffixes"]
+        and str(r.get("proxy", "")).upper() == "DIRECT"
+    ]
     try:
         data = host.api(p["clash_api"], "/proxies/" + quote(group))
     except HostError as exc:
         if "返回 404" in str(exc):
-            return FAIL, "分组 %s 不存在" % group
+            if direct_leaks:
+                return FAIL, "; ".join(direct_leaks)
+            if required:
+                return FAIL, "分组 %s 不存在（已设 google_split_required=true）" % group
+            return INFO, "单出口模式：分组 %s 不存在，Google 与 Claude 共用主出口 %s（主出口未被 Google 误判中国时无需拆分；若遇 Gemini 报不支持地区再加第 2 节点分流）" % (group, p["exit_node"])
         raise
     members = data.get("all") or []
-    problems = []
+    problems = list(direct_leaks)
     if data.get("type") != "Selector":
         problems.append("type=%s（要求 Selector）" % data.get("type"))
     if any(m.upper() in ("DIRECT", "REJECT") for m in members):
         problems.append("成员含 DIRECT/REJECT")
-    if data.get("now") == p["exit_node"]:
-        problems.append("当前选中的是 Claude 出口 %s（Google 会把它判成中国；换成别的节点）" % p["exit_node"])
-    rules = host.api(p["clash_api"], "/rules").get("rules") or []
+
     def index(pred):
         return next((i for i, r in enumerate(rules) if pred(r)), None)
     for suffix in p["google_suffixes"]:
@@ -476,6 +487,10 @@ def check_clash_google_exit(host, p, a):
             problems.append("%s 的精确规则排在 Google 后缀规则之后（Claude 的资源会跟着走 Google 出口）" % exact)
     if problems:
         return FAIL, "; ".join(problems)
+    if data.get("now") == p["exit_node"]:
+        if required:
+            return FAIL, "当前选中的是 Claude 出口 %s（已设 google_split_required=true；请换成其他节点）" % p["exit_node"]
+        return INFO, "单出口模式：当前选中的是 Claude 出口 %s（主出口未被 Google 误判中国时可共用；若遇 Gemini 报不支持地区，在代理页把 %s 换成任意协议的其他节点）" % (p["exit_node"], group)
     return PASS, "%s: Selector now=%s 成员=%s；%d 条 Google 规则在 GEOSITE 之前" % (group, data.get("now"), members, len(p["google_suffixes"]))
 
 
@@ -911,6 +926,131 @@ def check_language(host, p, a):
     return INFO, "语言顺序 %s；首位 %s（%s；可选步骤，不改也算通过）" % (langs, first, note)
 
 
+def _parse_shipit_bytes(raw):
+    stripped = raw.lstrip()
+    if stripped.startswith(b"{"):
+        return json.loads(stripped.decode("utf-8"))
+    return plistlib.loads(raw)
+
+
+def check_desktop_updater(h, p, a):
+    app_suffix = "Claude" + ".app"
+    apps = [p["claude_desktop_app"], str(h.home() / "Applications" / app_suffix)]
+    found_app = next((x for x in apps if h.lstat(x) is not None), None)
+    required = bool(p.get("desktop_block_updates_required"))
+    if found_app is None:
+        return INFO, "未安装 Claude Desktop（找过 %s），跳过" % "、".join(apps)
+
+    inst_ver = "?"
+    info_path = found_app + "/Contents/Info.plist"
+    if h.lstat(info_path) is not None:
+        try:
+            idata = plistlib.loads(h.read_bytes(info_path))
+            inst_ver = str(idata.get("CFBundleShortVersionString") or idata.get("CFBundleVersion") or "?")
+        except (HostError, ValueError):
+            inst_ver = "?"
+
+    shipit_id = "com." + "anthropic" + ".claudefordesktop.ShipIt"
+    shipit_dir = str(h.home() / "Library/Caches" / shipit_id)
+    state_path = shipit_dir + "/ShipItState.plist"
+    staged_ver = None
+    if h.lstat(state_path) is not None:
+        try:
+            sdata = _parse_shipit_bytes(h.read_bytes(state_path))
+            raw_url = sdata.get("updateBundleURL") if isinstance(sdata, dict) else None
+            if isinstance(raw_url, str) and raw_url.startswith("file://"):
+                bundle = unquote(urlsplit(raw_url).path).rstrip("/")
+                st_info = bundle + "/Contents/Info.plist"
+                if h.lstat(st_info) is not None:
+                    st_data = plistlib.loads(h.read_bytes(st_info))
+                    staged_ver = str(st_data.get("CFBundleShortVersionString") or st_data.get("CFBundleVersion") or "待装包")
+                else:
+                    staged_ver = "待装包"
+        except (HostError, ValueError):
+            staged_ver = "待装包"
+
+    rc_shipit, _, _ = h.run(["launchctl", "print", "gui/%s/%s" % (h.console_uid(), shipit_id)])
+    shipit_armed = rc_shipit == 0
+
+    support_dir = str(h.home() / "Library/Application Support/Claude")
+    retry_banner = False
+    misplaced = []
+    for cfg_name in ("config.json", "claude_desktop_config.json"):
+        cfg_path = support_dir + "/" + cfg_name
+        if h.lstat(cfg_path) is not None:
+            try:
+                cdata = json.loads(h.read_text(cfg_path))
+                if isinstance(cdata, dict):
+                    if cfg_name == "config.json" and cdata.get("updaterFailedInstall"):
+                        retry_banner = True
+                    if "disableAutoUpdates" in cdata or (
+                        isinstance(cdata.get("preferences"), dict) and "disableAutoUpdates" in cdata["preferences"]
+                    ):
+                        misplaced.append(cfg_name)
+            except (HostError, ValueError):
+                pass
+
+    domain_plist = "com." + "anthropic" + ".claudefordesktop.plist"
+    user = h.console_name()
+    mp_found = None
+    mp_val = None
+    for mp in ("/Library/Managed Preferences/" + domain_plist,
+               "/Library/Managed Preferences/%s/%s" % (user, domain_plist)):
+        if h.lstat(mp) is not None:
+            mp_found = mp
+            try:
+                mdata = plistlib.loads(h.read_bytes(mp))
+                mp_val = mdata.get("disableAutoUpdates") if isinstance(mdata, dict) else None
+            except (HostError, ValueError) as exc:
+                if required:
+                    return FAIL, "%s 无法解析: %s" % (mp, exc)
+            break
+
+    prof_id = p["claude_desktop_profile_identifier"]
+    policy_ok = False
+    policy_note = "未启用（可选项，默认允许自动更新）"
+    if mp_found is not None:
+        if mp_val is True:
+            if required:
+                _, pout, _ = h.priv(["profiles", "-P"])
+                if prof_id not in pout:
+                    return FAIL, "%s 存在但无描述文件 %s 支撑（会被系统清掉）" % (mp_found, prof_id)
+            policy_ok = True
+            policy_note = "已启用（%s disableAutoUpdates=true）" % mp_found
+        else:
+            policy_note = "%s disableAutoUpdates=%r（未设为 true）" % (mp_found, mp_val)
+    elif required:
+        _, pout, _ = h.priv(["profiles", "-P"])
+        if prof_id in pout:
+            return FAIL, "描述文件已装但 Managed Preferences 尚未生效（重新登录后再查）"
+
+    staged_txt = (
+        "有 %s（ShipIt挂起=%s%s）" % (
+            ("v" + staged_ver) if staged_ver and staged_ver != "待装包" else "待装包",
+            "是，退出即安装" if shipit_armed else "否",
+            "，界面显示重试更新提示" if retry_banner else "",
+        )
+        if (staged_ver or shipit_armed)
+        else "无"
+    )
+    extra = []
+    if misplaced:
+        extra.append("注意：%s 里的 disableAutoUpdates 对个人版 1p 不生效" % "、".join(misplaced))
+    if staged_ver or shipit_armed:
+        extra.append("AI 须先用 claude-client-full-reset/scripts/desktop_update_audit.py 检测更新包并结合本机情况向用户说明包内容与安全判断，再询问是否开启可选禁自动更新")
+    else:
+        extra.append("禁止自动更新为可选项，须询问用户意愿，不默认开启")
+
+    summary = "已装 v%s；待装更新=%s；受管禁更新策略=%s（%s）" % (inst_ver, staged_txt, policy_note, "；".join(extra))
+    if required:
+        if not policy_ok:
+            return FAIL, summary
+        if shipit_armed:
+            return FAIL, summary + "；ShipIt 仍在后台挂起待装包，请按用户意愿处理"
+        return PASS, summary
+    return INFO, summary
+
+
 CHECKS = {name[len("check_"):]: fn for name, fn in globals().items() if name.startswith("check_")}
 CHECKS["macos"] = check_os  # older manifests
 NETWORK_CHECKS = {"exit_ip", "dns_upstream"}
@@ -1005,6 +1145,8 @@ def apply_overrides(params, overrides):
             raise ValueError("未知参数 %s" % key)
         if isinstance(params[key], list):
             params[key] = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(params[key], bool):
+            params[key] = value.strip().lower() in ("1", "true", "yes", "on")
         elif isinstance(params[key], int) and not isinstance(params[key], bool):
             params[key] = int(value)
         else:

@@ -1,6 +1,6 @@
 # 执行手册（Windows 10/11）：把一台 Windows 配成参考机的等价物
 
-与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts/mirror_check.py --only <id>` 的输出原文；`py -3 scripts/next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（28 个），`mirror_check` 在 Windows 上自动只跑这些。
+与 [macOS 手册](runbook.md) 同一套规矩：每步 **进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**；对账是 `py -3 scripts/mirror_check.py --only <id>` 的输出原文；`py -3 scripts/next_step.py` 会按下面的顺序告诉你现在做哪一步。Windows 的组件 id 见附录 B（29 个），`mirror_check` 在 Windows 上自动只跑这些。
 
 执行主体是 AI；👤 的动作由用户做（双击 `.cmd`/`.reg`、UAC 点"是"、在 Clash Verge / 设置里点、截图）。所有 `.cmd` 都把输出写到 `installers\logs\<名字>-<随机>.log`，最后一行 `EXIT=`。
 
@@ -64,8 +64,8 @@ py -3 scripts/mirror_check.py --no-network
 组件：`clash.core clash.xhttp_core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53`（`dns.system` ℹ️ 只记录：实测 Clash Verge 2.4.4 Windows 开 TUN 后不改系统 DNS，网卡上仍是路由器的 DNS，真实路径由 TUN 劫持 53 保证，见 `dns.local53`）。
 
 1. 👤 安装 Clash Verge（Windows），打开 → 设置 → **安装服务模式**（TUN 需要）。
-2. AI：`py -3 scripts/render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库）。
-3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；点这张卡设为当前（脚本 `clash-profile.script.js` **可选**，模板已带同样的 DNS 与 STUN 规则）；设置里系统代理开、DNS 覆写关；设置里开 **TUN 模式**；代理页把出口分组选到出口节点，把 `Google出口` 选成**主出口以外**的节点（Google 常把机房 IP 判成中国，Gemini 会报不支持地区）。
+2. AI：`py -3 scripts/render.py --component clash --nodes <节点参数.json>`（节点 JSON 放私有目录，不进仓库；1 个主出口节点即可，支持 VLESS/Trojan/SS/SOCKS5 等任意协议或 `NODE1_PROXY` 原样对象；只有主出口被 Google 误判中国且有第 2 节点时才配 `NODE2`）。
+3. 👤 配置 → 新建 → Local → 导入渲染出的 yaml；点这张卡设为当前（脚本 `clash-profile.script.js` **可选**，模板已带同样的 DNS 与 STUN 规则）；设置里系统代理开、DNS 覆写关；设置里开 **TUN 模式**；代理页把出口分组选到出口节点（若因主出口送中配了 `Google出口`，再把它选成主出口以外的节点；单出口模式下 `clash.google_exit` 记 `ℹ️` 正常通过）。
 4. 对账：`py -3 scripts/mirror_check.py --only clash.core,clash.xhttp_core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53`。
 
 控制通道：Windows 版 Clash Verge 在命名管道 `\\.\pipe\verge-mihomo`（`params_win.clash_api`）；若用户另设了 `external-controller`，用 `--param clash_api=http://127.0.0.1:<端口>` 并设环境变量 `MIHOMO_SECRET`。TUN 适配器默认名 `Meta`（`params_win.tun_device`）。
@@ -103,7 +103,10 @@ py -3 scripts/mirror_check.py --no-network
 
 ## S7 系统时区（语言可选）
 
-组件：`sys.timezone`（`sys.language` ℹ️）。👤 双击 `installers\win\设置时区.cmd`（UAC；时区 id 来自 `params_win.timezone_win`，默认 `Pacific Standard Time`，`tzutil /l` 可查）。对账：`--only sys.timezone,sys.language`。
+组件：`sys.timezone`、`desktop.updater`（默认 ℹ️，可选；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（ℹ️）。
+1. 👤 双击 `installers\win\设置时区.cmd`（UAC；时区 id 来自 `params_win.timezone_win`，默认 `Pacific Standard Time`，`tzutil /l` 可查）。
+2. **更新包审计与可选禁自动更新（先查清再询问用户，不默认开启）**：若 `desktop.updater` 发现已有待重试/暂存更新包或用户关心更新安全，AI 先只读运行 `claude-client-full-reset/scripts/desktop_update_audit.py`，向用户汇报**此次更新包内容 + 结合本机情况（含 Persona/遥测分流覆盖）的判断**，再询问是否开启**可选**的禁止自动更新策略；只有用户明确要锁时才写 `"desktop_block_updates_required": true` 并让 👤 双击导入 `installers\win\Claude禁自动更新.reg`（撤回用 `卸载Claude禁自动更新.reg`；注意个人版 `1p` 在 `%APPDATA%\Claude\claude_desktop_config.json` 里写 `disableAutoUpdates` 不生效）。
+对账：`--only sys.timezone,desktop.updater,sys.language`。
 
 ## S8 实测
 
@@ -111,7 +114,7 @@ py -3 scripts/mirror_check.py --no-network
 
 ## S9 交付
 
-`py -3 scripts/mirror_check.py` 全量：`合计` 行 ❌=0 ❓=0（ℹ️ 2：语言、Windows 的系统 DNS 记录项；👉 1）。再 👤 用 Chrome/Edge 打开 <https://ippure.com/claude.html> 截两张图，按 [ippure 验收](ippure-acceptance.md) 记四项。交付内容同 macOS 手册 S12。
+`py -3 scripts/mirror_check.py` 全量：`合计` 行 ❌=0 ❓=0（ℹ️ 含语言、Windows 系统 DNS 记录项及默认 `desktop.updater`；👉 1）。再 👤 用 Chrome/Edge 打开 <https://ippure.com/claude.html> 截两张图，按 [ippure 验收](ippure-acceptance.md) 记四项。交付内容同 macOS 手册 S12。
 
 ## 退出码
 
@@ -132,6 +135,7 @@ py -3 scripts/mirror_check.py --no-network
 | `dns.system` 显示 ℹ️ | 正常：Windows 的受管 DNS 值只记录，真实路径看 `dns.local53` | 当 ❌ 去改 DNS |
 | 用户这台是游戏机（LOL/PUBG、加速器） | 让用户二选一并记下来：**(a) 用 Claude 时**一键安装 + 开 TUN，**打游戏前**一键撤回 + 关 TUN（每次往返约 1 分钟，防护最全）；**(b) 不想来回切**就不装防火墙规则，只留 Clash 规则模式 + 浏览器策略 + 时区（没有物理网卡墙，`wf.*` 永远 ❌，交付时写明） | 长期装 user-public 规则又开着加速器（会拦游戏和加速器的直连） |
 | 用户要求在 Windows 上也做精确 IP 更新器 | 说明 Windows 侧只做整段墙 + Clash 域名规则（决定见 docs/release-tasks.md） | 移植 macOS 的更新器 |
+| Claude Desktop 提示更新 / 用户问禁自动更新 | 先用 `desktop_update_audit.py` 只读拆检更新包并结合本机状态向用户汇报**包内容 + 本机判断**，再说明禁更新是**可选项**并询问；用户要锁才设 `desktop_block_updates_required: true` 并让双击 `Claude禁自动更新.reg` | 不问用户默认导入 `Claude禁自动更新.reg`；或写 `claude_desktop_config.json` 谎称生效 |
 
 ## 附录 A：卸载
 
@@ -148,6 +152,6 @@ py -3 scripts/mirror_check.py --no-network
 | `net.ipv6_off` `task.ipv6` | S4 | `安装IPv6守护.cmd` |
 | `chrome.policy` `reg.edge` `browser.webrtc` | S5 | `Chrome策略.reg`、`Edge策略.reg`、`assets\webrtc-test.html` |
 | `tool.claude_wall_ps` | S6 | `安装体检工具.cmd` |
-| `sys.timezone` `sys.language` | S7 | `设置时区.cmd` |
+| `sys.timezone` `desktop.updater` `sys.language` | S7 | `设置时区.cmd` + 可选 `Claude禁自动更新.reg` |
 | `net.exit_ip` `dns.upstream` | S8 | `mirror_check --only net.exit_ip,dns.upstream` + ippure |
 | —（全部步骤） | S9 | `mirror_check` 全量 + ippure 两张截图 |

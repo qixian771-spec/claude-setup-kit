@@ -10,9 +10,9 @@
 
 | 部分 | 仓库 | 管什么 |
 |---|---|---|
-| 总入口 + Mac 环境镜像 | **本仓库** | `START.md` 选路；`manifest.json` 46 个组件（Mac 39、Windows 28）；`mirror_check.py` 只读对账；`next_step.py` 告诉 AI 现在做什么；Clash 配置模板、PF 三道墙、守护、更新器、IPv6 守护、Chrome 描述文件的双击安装器；ippure 验收 |
+| 总入口 + Mac 环境镜像 | **本仓库** | `START.md` 选路；`manifest.json` 47 个组件（Mac 40、Windows 29）；`mirror_check.py` 只读对账；`next_step.py` 告诉 AI 现在做什么；Clash 配置模板、PF 三道墙、守护、更新器、IPv6 守护、Chrome 描述文件与可选禁更新描述文件的双击安装器；ippure 验收 |
 | 建节点 | [vps-node-rebuild-3xui](https://github.com/qixian771-spec/vps-node-rebuild-3xui) | VPS、3x-ui、VLESS-REALITY 节点部署与验收 |
-| 清理重置 | [claude-client-full-reset](https://github.com/qixian771-spec/claude-client-full-reset) | Claude 本地数据与标识清理、清理前后 ID 快照对比、遥测开关与分流补齐 |
+| 清理重置 | [claude-client-full-reset](https://github.com/qixian771-spec/claude-client-full-reset) | Claude 本地数据与标识清理、清理前后 ID 快照对比、遥测开关与分流补齐、桌面端暂存更新包只读拆检（`desktop_update_audit.py`） |
 
 START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走；用户不需要再分别发链接。
 
@@ -21,13 +21,13 @@ START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走�
 | 东西 | 作用 |
 |---|---|
 | `START.md` | AI 的总手册：先问什么、四条路线、产出与交回、交付清单 |
-| `manifest.json` | 46 个组件（Mac 39 / Windows 28）的契约（怎么验证、失败下一步）+ 12 个步骤的顺序、前置、安装器、对用户说的话 |
+| `manifest.json` | 47 个组件（Mac 40 / Windows 29）的契约（怎么验证、失败下一步）+ 12 个步骤的顺序、前置、安装器、对用户说的话 |
 | `scripts/mirror_check.py` | 一条命令只读对账，✅/❌/❓/ℹ️/👉 表与退出码 0/1/2 |
 | `scripts/next_step.py` | 读对账结果，按步骤顺序打印"现在做什么"；全过时打印 ippure 验收任务 |
 | `scripts/render.py` | 把 `system/`、`templates/` 的占位符模板按本机参数渲染到独立目录 |
-| `templates/clash-profile.template.yaml` | 参考机的 Clash 配置（111 条规则，去掉了新机器会卡死的 IP-ASN）：Claude 固定出口分组 + Google 专用分组（Gemini 不被判成中国）+ 遥测/CDN/第三方规则，节点全部占位符；NODE3（socks5）、NODE4（Cloudflare CDN 备用入口，XHTTP）可选 |
+| `templates/clash-profile.template.yaml` | 参考机的 Clash 配置（116 条规则，含 Persona 实名、Stripe Radar 刷卡信标、WorkOS 登录与 Statsig 伪装后缀固定走 Claude 出口，去掉了新机器会卡死的 IP-ASN）：Claude 固定出口分组（支持单节点及 VLESS/Trojan/SS/SOCKS5 等任意 Clash 协议）+ 智能按需的 Google 专用分组（仅在主出口被 Google 误判中国时启用 NODE2）+ 遥测/CDN/第三方规则；NODE2、NODE3、NODE4（Cloudflare CDN 备用入口，XHTTP）均可选 |
 | `installers/安装*.command`、`卸载.command` | 用户双击安装/卸载（先拒绝覆盖再写、pf.conf 备份+语法检查、装后验证），输出写 `installers/logs/` |
-| `installers/Chrome策略.mobileconfig` | Chrome WebRTC/DoH 策略描述文件（手工写 Managed Preferences 会被系统清掉） |
+| `installers/Chrome策略.mobileconfig`、`Claude禁自动更新.mobileconfig` | Chrome WebRTC/DoH 策略描述文件；Claude Desktop 可选禁自动更新受管策略（Windows 对应 `Claude禁自动更新.reg`，必须询问用户，默认不装） |
 | `assets/webrtc-test.html` | 本地 WebRTC 候选检查 |
 | `tools/check.py`、`tools/redact_check.py` | 打包检查；脱敏扫描（公网 IP、UUID、凭据、私人路径 0 命中才能提交） |
 | [references/runbook.md](references/runbook.md) / [runbook-windows.md](references/runbook-windows.md) | Mac 路线 S1–S12、Windows 路线 S1–S9 的逐步手册与情景推演 |

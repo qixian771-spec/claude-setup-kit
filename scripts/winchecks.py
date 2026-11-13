@@ -249,4 +249,49 @@ def check_language(host, p, a):
     return INFO, "语言顺序 %s；首位 %s（%s；可选步骤，不改也算通过）" % (langs, first, note)
 
 
+def check_desktop_updater(h, p, a):
+    candidates = [mc.expand(h, p["claude_desktop_app"]), mc.expand(h, "%LOCALAPPDATA%/Microsoft/WindowsApps/Claude.exe")]
+    if all(h.lstat(c) is None for c in candidates):
+        return INFO, "未安装 Claude Desktop（找过 %s），跳过" % "、".join(candidates)
+    required = bool(p.get("desktop_block_updates_required"))
+    key = p["claude_desktop_policy_key"]
+    policy_ok = False
+    try:
+        data = _ps_json(h, "Get-ItemProperty -Path %s | Select-Object disableAutoUpdates" % _q(key), "reg-Claude")
+        val = (data or {}).get("disableAutoUpdates")
+        policy_ok = val in (1, True)
+    except mc.HostError:
+        val = None
+
+    appdata_claude = mc.expand(h, "%APPDATA%/Claude")
+    retry_banner = False
+    misplaced = []
+    for cfg_name in ("config.json", "claude_desktop_config.json"):
+        cfg_path = appdata_claude + "\\" + cfg_name
+        if h.lstat(cfg_path) is not None:
+            try:
+                cdata = json.loads(h.read_text(cfg_path))
+                if isinstance(cdata, dict):
+                    if cfg_name == "config.json" and cdata.get("updaterFailedInstall"):
+                        retry_banner = True
+                    if "disableAutoUpdates" in cdata or (
+                        isinstance(cdata.get("preferences"), dict) and "disableAutoUpdates" in cdata["preferences"]
+                    ):
+                        misplaced.append(cfg_name)
+            except (mc.HostError, ValueError):
+                pass
+
+    pol_note = "已启用（%s disableAutoUpdates=1）" % key if policy_ok else "未启用（可选项，默认允许自动更新）"
+    extra = []
+    if retry_banner:
+        extra.append("检测到待重试更新标记，AI 须先用 claude-client-full-reset/scripts/desktop_update_audit.py 检测更新包并结合本机情况向用户说明包内容与安全判断")
+    if misplaced:
+        extra.append("注意：%s 里的 disableAutoUpdates 对个人版 1p 不生效" % "、".join(misplaced))
+    extra.append("禁止自动更新为可选项，须询问用户意愿，不默认开启")
+    summary = "已检测到 Claude Desktop；受管禁更新策略=%s（%s）" % (pol_note, "；".join(extra))
+    if required:
+        return (PASS, summary) if policy_ok else (FAIL, summary)
+    return INFO, summary
+
+
 CHECKS = {name[len("check_"):]: fn for name, fn in globals().items() if name.startswith("check_")}

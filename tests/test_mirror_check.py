@@ -508,14 +508,37 @@ class GoogleExitTests(unittest.TestCase):
         self.assertIn("韩国43", items["clash.google_exit"]["evidence"])
 
     def test_group_missing_or_pointing_at_claude_exit(self):
+        # Smart Mode default (google_split_required=false): single-exit setups report INFO (exit 0), not FAIL.
         host = FakeHost()
         del host.apis[GOOGLE_PATH]
-        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        code, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertEqual(code, 0)
+        self.assertEqual(items["clash.google_exit"]["status"], mc.INFO)
         self.assertIn("不存在", items["clash.google_exit"]["evidence"])
+        self.assertIn("单出口模式", items["clash.google_exit"]["evidence"])
+        # When google_split_required=true, missing group is FAIL.
+        code, items, _ = run_json(host, "--only", "clash.google_exit", "--param", "google_split_required=true")
+        self.assertEqual(code, 1)
+        self.assertEqual(items["clash.google_exit"]["status"], mc.FAIL)
+
         host = FakeHost()
         host.apis[GOOGLE_PATH]["now"] = "丽萨美国"
-        _, items, _ = run_json(host, "--only", "clash.google_exit")
+        code, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertEqual(code, 0)
+        self.assertEqual(items["clash.google_exit"]["status"], mc.INFO)
         self.assertIn("当前选中的是 Claude 出口", items["clash.google_exit"]["evidence"])
+        code, items, _ = run_json(host, "--only", "clash.google_exit", "--param", "google_split_required=true")
+        self.assertEqual(code, 1)
+        self.assertEqual(items["clash.google_exit"]["status"], mc.FAIL)
+
+        # Even in single-exit mode, Google suffix routed to DIRECT is always FAIL.
+        host = FakeHost()
+        del host.apis[GOOGLE_PATH]
+        host.apis["/rules"]["rules"].insert(0, {"type": "DomainSuffix", "payload": "google.com", "proxy": "DIRECT"})
+        code, items, _ = run_json(host, "--only", "clash.google_exit")
+        self.assertEqual(code, 1)
+        self.assertEqual(items["clash.google_exit"]["status"], mc.FAIL)
+        self.assertIn("google.com 走 DIRECT", items["clash.google_exit"]["evidence"])
 
     def test_rule_order_matters(self):
         host = FakeHost()
@@ -931,4 +954,61 @@ class XhttpCoreTests(unittest.TestCase):
         host.apis["/version"] = {"meta": True, "version": "alpha-g1234"}
         _, items, _ = run_json(host, "--only", "clash.xhttp_core")
         self.assertEqual(items["clash.xhttp_core"]["status"], mc.FAIL)  # unknown version: do not guess
+
+
+class DesktopUpdaterTests(unittest.TestCase):
+    def test_absent_claude_desktop_is_info(self):
+        _, items, _ = run_json(FakeHost(), "--only", "desktop.updater")
+        self.assertEqual(items["desktop.updater"]["status"], mc.INFO)
+        self.assertIn("未安装", items["desktop.updater"]["evidence"])
+
+    def test_staged_json_shipit_prompts_audit_and_optional_ask(self):
+        host = FakeHost()
+        app = "/Applications/Claude.app"
+        host.stats[app] = Stat(0, 0o40755)
+        host.stats[app + "/Contents/Info.plist"] = Stat(0, 0o100644)
+        host.bytes[app + "/Contents/Info.plist"] = plistlib.dumps({"CFBundleShortVersionString": "4.23118.0"})
+
+        shipit_id = "com.anthropic.claudefordesktop.ShipIt"
+        shipit_dir = HOME + "/Library/Caches/" + shipit_id
+        staged_app = shipit_dir + "/update.abc123/Claude.app"
+        host.stats[shipit_dir + "/ShipItState.plist"] = Stat(0, 0o100644)
+        # ShipIt writes UTF-8 JSON despite .plist extension
+        host.bytes[shipit_dir + "/ShipItState.plist"] = json.dumps({"updateBundleURL": "file://" + staged_app}).encode("utf-8")
+        host.stats[staged_app + "/Contents/Info.plist"] = Stat(0, 0o100644)
+        host.bytes[staged_app + "/Contents/Info.plist"] = plistlib.dumps({"CFBundleShortVersionString": "5.11492.2"})
+        host.cmds[("launchctl", "print", "gui/501/" + shipit_id)] = (0, "state = running\n", "")
+
+        cfg = HOME + "/Library/Application Support/Claude/claude_desktop_config.json"
+        host.stats[cfg] = Stat(501, 0o100644)
+        host.files[cfg] = json.dumps({"preferences": {"disableAutoUpdates": True}})
+
+        # Default mode: optional -> INFO, instructs AI to audit package + explain + ask user
+        code, items, _ = run_json(host, "--only", "desktop.updater")
+        self.assertEqual(code, 0)
+        self.assertEqual(items["desktop.updater"]["status"], mc.INFO)
+        ev = items["desktop.updater"]["evidence"]
+        self.assertIn("v4.23118.0", ev)
+        self.assertIn("v5.11492.2", ev)
+        self.assertIn("desktop_update_audit.py", ev)
+        self.assertIn("不生效", ev)
+
+        # User explicitly requests locking auto-updates -> FAIL when unlocked
+        code, items, _ = run_json(host, "--only", "desktop.updater", "--param", "desktop_block_updates_required=true")
+        self.assertEqual(code, 1)
+        self.assertEqual(items["desktop.updater"]["status"], mc.FAIL)
+
+        # MDM profile installed + ShipIt disarmed -> PASS
+        mp = "/Library/Managed Preferences/com.anthropic.claudefordesktop.plist"
+        host.stats[mp] = Stat(0, 0o100644)
+        host.bytes[mp] = plistlib.dumps({"disableAutoUpdates": True})
+        host.cmds[("profiles", "-P")] = (
+            0,
+            "_computerlevel[1] attribute: profileIdentifier: local.claude-mac-env-mirror.claude-desktop\n",
+            "",
+        )
+        host.cmds[("launchctl", "print", "gui/501/" + shipit_id)] = (113, "", "Could not find service")
+        code, items, _ = run_json(host, "--only", "desktop.updater", "--param", "desktop_block_updates_required=true")
+        self.assertEqual(code, 0)
+        self.assertEqual(items["desktop.updater"]["status"], mc.PASS)
 

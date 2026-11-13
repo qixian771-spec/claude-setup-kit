@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadIdentifier</key>
+	<string>local.claude-mac-env-mirror.claude-desktop</string>
+	<key>PayloadUUID</key>
+	<string>8A91C422-3B7D-4E19-9C64-5D82E1F0A311</string>
+	<key>PayloadDisplayName</key>
+	<string>Claude 环境镜像：Claude Desktop 禁用自动更新策略</string>
+	<key>PayloadDescription</key>
+	<string>通过 macOS 受管偏好设置（com.anthropic.claudefordesktop: disableAutoUpdates=true）禁止 Claude Desktop（含个人订阅版 1p）后台自动下载与静默重启更新。卸载描述文件即恢复自动更新。</string>
+	<key>PayloadOrganization</key>
+	<string>claude-mac-env-mirror</string>
+	<key>PayloadRemovalDisallowed</key>
+	<false/>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.anthropic.claudefordesktop</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadIdentifier</key>
+			<string>local.claude-mac-env-mirror.claude-desktop.policy</string>
+			<key>PayloadUUID</key>
+			<string>2F45D890-7C12-4A8E-B531-9E04C7128B55</string>
+			<key>PayloadDisplayName</key>
+			<string>Claude Desktop 策略：disableAutoUpdates=true</string>
+			<key>PayloadEnabled</key>
+			<true/>
+			<key>disableAutoUpdates</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

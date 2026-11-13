@@ -1,14 +1,15 @@
-# claude-setup-kit — Clash Verge 本地配置模板（照参考机 2026-10-23 现状，节点全部换成占位符）
+# claude-setup-kit — Clash Verge 本地配置模板（照参考机现状，节点全部换成占位符）
 # 渲染：python3 scripts/render.py --component clash --nodes <你的节点参数.json>；或手工把双花括号占位符换成真实值。
-# 节点：NODE1（VLESS-REALITY，Claude 出口）和 NODE2（trojan，Google 出口）必填；NODE3（socks5）和 NODE4（经 Cloudflare CDN
-#   进 NODE1 同一台机器的 XHTTP 备用入口）可选——不给对应的键时，render.py 会整个去掉它们的代理和分组成员
-#   （靠下面 "# IF NODEn_NAME" / "# ENDIF" 形式的条件标记）。NODE4 只进 EXIT_GROUP 当备用成员、不选中。
+# 节点（支持任意 Clash 协议：VLESS / Trojan / Shadowsocks ss / SOCKS5 / VMess / Hysteria2 或直接传 NODEn_PROXY 原样对象）：
+#   - NODE1（Claude 固定主出口）必填；默认字段为 VLESS-REALITY，也可用 NODE1_TYPE 或 NODE1_PROXY 指定任意协议。
+#   - NODE2（Google 专用出口）可选：只有主出口被 Google 误判成中国（送中，Gemini 报不支持该地区）且用户有第 2 个节点时才填；
+#     不给 NODE2 时自动切为单出口模式（去掉 Google出口 分组与 4 条 Google 后缀规则，Google 随主出口走）。
+#   - NODE3（额外备用节点）和 NODE4（经 Cloudflare CDN 进 NODE1 同一台机器的 XHTTP 备用入口）可选——不给对应的键时，
+#     render.py 会整个去掉它们的代理和分组成员（靠下面 "# IF NODEn_NAME" / "# ENDIF" 形式的条件标记）。NODE4 只进 EXIT_GROUP。
 # 导入 Clash Verge 后，脚本 templates/clash-profile.script.js 可选：模板里已有同样的 DNS 段和 STUN 拦截规则。
-# 分组：EXIT_GROUP 是 Claude 的固定出口（成员不许有 DIRECT）；GOOGLE_GROUP 只给 Google 系域名用，
-#   成员是主出口以外的节点——Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"，
-#   所以 Google 走另一个节点，Claude 的出口不动。两个分组的规则顺序：Claude 的 storage/fonts 精确规则在前，
+# 分组：EXIT_GROUP 是 Claude 的固定出口（成员不许有 DIRECT）；启用 GOOGLE_GROUP 时，Claude 的 storage/fonts 精确规则在前，
 #   Google 后缀规则其次，GEOSITE/GEOIP 兜底在后。
-# rules 段含参考机的 111 条规则（去掉了 IP-ASN：它要先联网下载 ASN.mmdb，新机器没有代理时下载超时、整个配置验证失败）：其中监测/上报、CDN、第三方、进程兜底等 68 条来自 claude-client-full-reset 的
+# rules 段含参考机的 116 条规则（去掉了 IP-ASN：它要先联网下载 ASN.mmdb，新机器没有代理时下载超时、整个配置验证失败）：其中监测/上报、CDN、第三方（含 Persona 实名、Stripe 刷卡信标、WorkOS 登录与 Statsig 伪装后缀同出口）、进程兜底等来自 claude-client-full-reset 的
 #   telemetry_routing.py（6 大模块），要更新以那边为准。
 mixed-port: 7890
 allow-lan: false
@@ -57,6 +58,14 @@ dns:
     +.claudeusercontent.com:
     - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
     +.claudemcpcontent.com:
+    - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
+    +.withpersona.com:
+    - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
+    +.persona.com:
+    - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
+    +.stripe.network:
+    - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
+    +.workos.com:
     - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
     +.sentry.io:
     - https://1.1.1.1/dns-query#{{EXIT_GROUP}}
@@ -113,6 +122,10 @@ dns:
     geosite:private:
     - rcode://name_error
 proxies:
+# {{IF CUSTOM_NODE1}}
+{{CUSTOM_NODE1}}
+# {{ENDIF}}
+# {{IF DEFAULT_NODE1}}
 - name: '{{NODE1_NAME}}'
   type: vless
   server: '{{NODE1_SERVER}}'
@@ -128,6 +141,11 @@ proxies:
     public-key: '{{NODE1_REALITY_PUBLIC_KEY}}'
     short-id: '{{NODE1_REALITY_SHORT_ID}}'
     support-x25519mlkem768: true  # 参考机的 REALITY 服务端要求；不带这项握手直接失败（Windows 实机验证）
+# {{ENDIF}}
+# {{IF CUSTOM_NODE2}}
+{{CUSTOM_NODE2}}
+# {{ENDIF}}
+# {{IF DEFAULT_NODE2}}
 - name: '{{NODE2_NAME}}'
   type: trojan
   server: '{{NODE2_SERVER}}'
@@ -136,7 +154,11 @@ proxies:
   sni: '{{NODE2_SNI}}'
   skip-cert-verify: false
   udp: true
-# {{IF NODE3_NAME}}
+# {{ENDIF}}
+# {{IF CUSTOM_NODE3}}
+{{CUSTOM_NODE3}}
+# {{ENDIF}}
+# {{IF DEFAULT_NODE3}}
 - name: '{{NODE3_NAME}}'
   type: socks5
   server: '{{NODE3_SERVER}}'
@@ -168,14 +190,16 @@ proxy-groups:
   type: select
   proxies:
   - '{{NODE1_NAME}}'
-  - '{{NODE2_NAME}}'
+  - '{{NODE2_NAME}}'  # {{IF NODE2_NAME}}
   - '{{NODE3_NAME}}'  # {{IF NODE3_NAME}}
   - '{{NODE4_NAME}}'  # {{IF NODE4_NAME}}
+# {{IF NODE2_NAME}}
 - name: '{{GOOGLE_GROUP}}'
   type: select
   proxies:
   - '{{NODE2_NAME}}'
   - '{{NODE3_NAME}}'  # {{IF NODE3_NAME}}
+# {{ENDIF}}
 - name: GLOBAL
   type: select
   hidden: true
@@ -200,6 +224,7 @@ rules:
 - DOMAIN,mcp-proxy.anthropic.com,{{EXIT_GROUP}}
 - DOMAIN,bridge.claudeusercontent.com,{{EXIT_GROUP}}
 - DOMAIN,anthropic.auth0.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,workos.com,{{EXIT_GROUP}}
 - DOMAIN,anthropic-com.ghost.io,{{EXIT_GROUP}}
 - DOMAIN,cdn.anthropic.com,{{EXIT_GROUP}}
 - DOMAIN,assets-proxy.anthropic.com,{{EXIT_GROUP}}
@@ -231,9 +256,13 @@ rules:
 - DOMAIN-SUFFIX,intercomcdn.com,{{EXIT_GROUP}}
 - DOMAIN,cdn.usefathom.com,{{EXIT_GROUP}}
 - DOMAIN-SUFFIX,stripe.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,stripe.network,{{EXIT_GROUP}}
 - DOMAIN-SUFFIX,stripecdn.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,withpersona.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,persona.com,{{EXIT_GROUP}}
 - DOMAIN-SUFFIX,hcaptcha.com,{{EXIT_GROUP}}
 - DOMAIN-SUFFIX,arkoselabs.com,{{EXIT_GROUP}}
+- DOMAIN-SUFFIX,challenges.cloudflare.com,{{EXIT_GROUP}}
 - IP-CIDR,160.79.104.0/21,{{EXIT_GROUP}},no-resolve
 - IP-CIDR6,2607:6bc0::/32,{{EXIT_GROUP}},no-resolve
 - GEOSITE,anthropic,{{EXIT_GROUP}}
@@ -283,10 +312,12 @@ rules:
 - DOMAIN,cdn.tailwindcss.com,{{EXIT_GROUP}}
 - DOMAIN,code.jquery.com,{{EXIT_GROUP}}
 - DOMAIN,unpkg.com,{{EXIT_GROUP}}
+# {{IF NODE2_NAME}}
 - DOMAIN-SUFFIX,google.com,{{GOOGLE_GROUP}}
 - DOMAIN-SUFFIX,googleapis.com,{{GOOGLE_GROUP}}
 - DOMAIN-SUFFIX,gstatic.com,{{GOOGLE_GROUP}}
 - DOMAIN-SUFFIX,googleusercontent.com,{{GOOGLE_GROUP}}
+# {{ENDIF}}
 - GEOSITE,private,DIRECT
 - GEOIP,private,DIRECT,no-resolve
 - GEOSITE,CN,DIRECT

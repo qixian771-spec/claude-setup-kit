@@ -117,7 +117,8 @@ class LauncherTests(unittest.TestCase):
             self.assertTrue(raw.startswith(b"\xff\xfe"), "%s 必须是 UTF-16LE（regedit 要求）" % reg.name)
             text = raw[2:].decode("utf-16-le")
             self.assertTrue(text.startswith("Windows Registry Editor Version 5.00"), reg.name)
-            self.assertIn("WebRtcIPHandling", text)
+            expected_key = "disableAutoUpdates" if "禁自动更新" in reg.name else "WebRtcIPHandling"
+            self.assertIn(expected_key, text, reg.name)
 
     def test_install_scripts_refuse_before_writing(self):
         # refuse_existing must come before the first install/cp/launchctl in every root installer.

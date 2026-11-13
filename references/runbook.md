@@ -1,6 +1,6 @@
 # 执行手册：把一台 Mac 配成参考机
 
-流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 39 个在附录 B 对照表里。
+流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 40 个在附录 B 对照表里。
 
 执行主体是 AI；只有标了 👤 的动作要用户亲自做（双击 `.command`、输密码、在 Clash Verge / 系统设置里点按钮、截图）。AI 渲染、读日志、对账、交付。
 
@@ -37,18 +37,18 @@
 
 ## S1 Clash Verge
 
-进入：G1 完成；用户有节点参数（至少两个：Claude 主出口 + 一个给 Google 用的；可选第四个：经 Cloudflare CDN 进主出口同一台机器的 XHTTP 备用入口，做法见 [cdn-backup.md](cdn-backup.md)）。组件：`clash.core clash.xhttp_core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53 dns.system`。
+进入：G1 完成；用户有节点参数（**1 个主出口节点即可，支持 VLESS/Trojan/Shadowsocks `ss`/SOCKS5 等任意 Clash 协议或 `NODE1_PROXY` 原样对象**；只有主出口 IP 被 Google 误判成中国导致 Gemini 报不支持地区、且用户有第 2 个节点时，才配 `NODE2` 给 `Google出口` 分流；可选 `NODE4` 为经 Cloudflare CDN 进主出口同一台机器的 XHTTP 备用入口，做法见 [cdn-backup.md](cdn-backup.md)）。组件：`clash.core clash.xhttp_core clash.base_config clash.mode clash.tun clash.exit clash.rules clash.google_exit clash.dns net.tun_iface dns.local53 dns.system`。
 
 动作：
 1. 👤 安装 Clash Verge（参考机 2.5.2，核心 mihomo v1.19.29），打开一次，**设置 → 服务模式 安装**（TUN 需要）。
-2. AI 把节点参数写成 JSON（键名见 `templates/clash-profile.template.yaml` 里的 `{{NODEn_*}}`；文件放私有目录，**不进仓库**），渲染：
+2. AI 把节点参数写成 JSON（默认键见 `templates/clash-profile.template.yaml`，其它协议用 `NODE1_TYPE`/`NODE2_TYPE` 如 `"trojan"`/`"ss"` 或直接传 `"NODE1_PROXY": {...}`；文件放私有目录，**不进仓库**），渲染：
    `python3 scripts/render.py --component clash --nodes <节点参数.json>` → 输出目录里 `templates/clash-profile.template.yaml` 与 `clash-profile.script.js`。
 3. 👤 Clash Verge → 配置（订阅）→ 新建 → 类型 Local → 导入渲染的 yaml → 点这张卡设为当前。脚本 `clash-profile.script.js` **可选**：模板里已经有一模一样的 DNS 段和 STUN 拦截规则。**不要用手写 profiles.yaml 的方式注册配置卡**（实测 Clash Verge 能选中但不会用它的内容）。
 4. 👤 设置：开 TUN 模式、系统代理开、DNS 覆写关（脚本已写 DNS）；代理页把 `出口选择` 选到出口节点。
-4b. 👤 代理页把 `Google出口` 选成**主出口以外**的节点（参考机用韩国节点）。为什么：Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Google 走另一个节点，Claude 的出口不动，`storage.googleapis.com`/`fonts.*` 这些 Claude 要用的仍走主出口（规则顺序已在模板里排好）。
+4b. **（智能按需）Google 分流**：若主出口未被 Google 误判成中国（或只有 1 个节点），保持单出口共用即可（不配 `NODE2` 时无 `Google出口` 分组，`clash.google_exit` 记 `ℹ️` 正常通过）。只有主出口被 Google 判成 CN/HK（送中，Gemini 提示"不支持该地区"）且配了 `NODE2` 时，👤 在代理页把 `Google出口` 选成**主出口以外**的节点（任意协议均可，Claude 的 `storage.googleapis.com`/`fonts.*` 仍固定走主出口）。
 5. 对账：`python3 scripts/mirror_check.py --only clash.core,clash.xhttp_core,clash.base_config,clash.mode,clash.tun,clash.exit,clash.rules,clash.google_exit,clash.dns,net.tun_iface,dns.local53,dns.system`
 
-读：十一项全 ✅。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；S1 配置阶段允许退出 Clash Verge（托盘里退出）删掉这几段再开——这是"不退出 Clash"硬规则唯一的例外，只在还没开始用 Claude 时做。`clash.google_exit` ❌ 说"当前选中的是 Claude 出口"时去代理页换节点，不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
+读：全部通过（无 ❌/❓；单出口模式下 `clash.google_exit` 为 ℹ️ 属正常通过，拆分独立 Google 节点时为 ✅）。`clash.base_config` ❌ = Clash Verge 的基础配置 `config.yaml` 里夹带了 proxies/proxy-groups/rules/dns，会覆盖任何订阅（Windows 实机踩过：选哪张卡跑的都是旧分组）；S1 配置阶段允许退出 Clash Verge（托盘里退出）删掉这几段再开——这是"不退出 Clash"硬规则唯一的例外，只在还没开始用 Claude 时做。若开启了强制拆分（`google_split_required: true`）而 `clash.google_exit` ❌ 说"当前选中的是 Claude 出口"，去代理页换 `Google出口` 的节点，绝不要去改 `出口选择`。`dns.system` 显示 114.114.114.114 是 Clash Verge 自己写的，接受；真正的路径由 `dns.local53` 证明。
 
 停止：`clash.core` ❓ = 核心没起/控制 socket 路径不同（`--param clash_api=`）；`clash.xhttp_core` ❌ = 配置里有 NODE4（XHTTP）但内核太旧，整份配置都不会加载——让用户升级 Clash Verge 或先不给 NODE4；`clash.exit` ❌ = 分组里有 DIRECT 或没选到节点，先在 GUI 改；`clash.rules`/`clash.dns` ❌ = 导入的不是渲染文件或脚本没绑定。不进 S4 之前这些必须 ✅——**S4 的墙会把没走 TUN 的公网全部拦掉**。
 
@@ -118,9 +118,13 @@
 
 ## S10 系统设置
 
-组件：`sys.timezone`（必做）、`sys.language`（可选，ℹ️）。
-动作：👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（东京、新加坡、首尔都可以；只有中国大陆、香港、澳门被判 ❌）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
-对账：`--only sys.timezone,sys.language`。
+组件：`sys.timezone`（必做）、`desktop.updater`（默认 ℹ️；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（可选，ℹ️）。
+动作：
+1. 👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（东京、新加坡、首尔都可以；只有中国大陆、香港、澳门被判 ❌）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
+2. **更新包审计与可选禁自动更新（必须先查清再询问用户，不默认锁）**：
+   - 若 `desktop.updater` 显示已有暂存更新包（`ShipItState.plist` / `ShipIt` 挂起），AI 必须先只读运行 `claude-client-full-reset/scripts/desktop_update_audit.py`（不关 Claude、不改应用目录），向用户汇报两件事：**① 此次更新包具体内容**（版本与 Electron 跨度、原生模块变化、新增域名/接口/遥测事件、是否发现硬件序列号/UUID/MAC 采集或 WebRTC 直连暗桩、Persona 实名页是否纯属云端网页下发，以及个人版 `1p` 遥测照常发往 `api.anthropic.com/api/event_logging/batch` 的实情）；**② 结合这台机器现状的判断**（ShipIt 是否挂起退出即装、当前 Clash 分流是否已覆盖 `withpersona.com` 等核验/遥测域名、受管策略现状）。
+   - 汇报后询问用户是否开启**可选**的禁止自动更新策略：保留默认则不动（补齐分流后可正常升级）；只有用户明确选择锁更新时，才在 `mirror.params.json` 设 `"desktop_block_updates_required": true`，并让 👤 双击 `installers/Claude禁自动更新.mobileconfig` → 系统设置 → 通用 → 设备管理 → 安装（注意：个人版 `1p` 在 `claude_desktop_config.json` 或 `defaults write` 里写 `disableAutoUpdates` 都不生效，只有 MDM 受管描述文件生效；若此前 ShipIt 已挂起旧暂存包，由用户在了解后果后决定是否卸掉当前本轮 ShipIt 任务）。
+对账：`--only sys.timezone,desktop.updater,sys.language`。
 
 ## S11 实测
 
@@ -130,7 +134,7 @@
 
 ## S12 交付
 
-动作：`python3 scripts/mirror_check.py` 全量，`合计` 行 ❌=0、❓=0（ℹ️ 1 语言、👉 1 WebRTC 人工项是正常的）。
+动作：`python3 scripts/mirror_check.py` 全量，`合计` 行 ❌=0、❓=0（ℹ️ 含语言与默认 `desktop.updater`、👉 1 WebRTC 人工项是正常的）。
 交付内容：全量对账表原文 + 每步日志路径 + chrome://policy 截图 + WebRTC 截图 + ippure 两张截图 + 没做/做不到的项（未授权跳过的、Firefox、硬件指纹、Claude 共用 CDN 域名）。
 
 ## 3. 退出码
@@ -177,6 +181,7 @@
 | 用户让 AI 自己 `sudo` 装 | 说明安装只走双击文件，AI 读日志 | 自己提权 |
 | 用户让测"出口断了会不会直连" | 解释 020 + 010/011 的 fail-closed 设计（不会直连），不做断网测试 | 退出 Clash 试 |
 | 语言顺序 zh 第一 | ℹ️ 记录 +24 分，问用户要不要改 | 擅自改系统语言 |
+| Claude Desktop 提示重启更新 / 用户问要不要禁自动更新 | 先只读跑 `desktop_update_audit.py`，向用户汇报**此次更新包内容 + 结合本机状态（ShipIt 挂起、Persona/遥测分流覆盖）的判断**，再说明禁自动更新是**可选项**并询问用户；用户要锁才设 `desktop_block_updates_required: true` 并引导双击 `Claude禁自动更新.mobileconfig` | 不问用户直接默认装禁更新；或把 `disableAutoUpdates` 写进 `claude_desktop_config.json` 谎称生效（个人版 `1p` 只认 MDM 受管策略）；或强杀正在运行的 Claude |
 | 共用 CDN（downloads.claude.ai、statsig）走不了墙 | 交付里写明：这些靠 Clash 规则，不靠 PF | 把 Google/CloudFront 整段写进墙 |
 
 ## 附录 A：卸载与回滚
@@ -197,6 +202,6 @@
 | `net.ipv6_off` `daemon.ipv6` `ipv6.script` | S7 | `安装IPv6守护.command` |
 | `tool.claude_wall` | S8 | `安装体检工具.command` |
 | `chrome.policy` `browser.webrtc` | S9 | `Chrome策略.mobileconfig` + `assets/webrtc-test.html` |
-| `sys.timezone` `sys.language` | S10 | 系统设置（用户） |
+| `sys.timezone` `desktop.updater` `sys.language` | S10 | 系统设置（用户）+ 可选 `Claude禁自动更新.mobileconfig` |
 | `net.exit_ip` `dns.upstream` | S11 | `mirror_check --only net.exit_ip,dns.upstream` + ippure |
 | —（全部步骤） | S12 | `mirror_check` 全量 ❌=0 ❓=0 + ippure 两张截图 |

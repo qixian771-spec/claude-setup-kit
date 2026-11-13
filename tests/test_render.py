@@ -286,6 +286,81 @@ class ComponentTests(RenderFixture):
         self.assertEqual(code, 0)
         self.assertIn("USER=tester", out)
 
+    def test_single_node_renders_without_google_group(self):
+        # Smart Google Split: users with only 1 node (or main exit not misjudged as CN/HK) omit NODE2_*.
+        nodes = self.root / "one-node.json"
+        nodes.write_text(json.dumps({
+            "NODE1_TYPE": "trojan",
+            "NODE1_NAME": "主出口Trojan",
+            "NODE1_SERVER": "trojan.example.com",
+            "NODE1_PORT": 443,
+            "NODE1_PASSWORD": "pw-test-value",
+            "NODE1_SNI": "trojan.example.com",
+        }), encoding="utf-8")
+        values = dict(self.values(), **render.load_nodes(nodes))
+        render.render_component("clash", values, self.root / "c-single")
+        text = (self.root / "c-single/templates/clash-profile.template.yaml").read_text(encoding="utf-8")
+        body = text.split("\nmixed-port", 1)[1]
+        self.assertNotIn("{{", text)
+        self.assertIn("type: 'trojan'", body)
+        self.assertIn("- '主出口Trojan'", body)
+        self.assertNotIn("Google出口", body)
+        self.assertNotIn("DOMAIN-SUFFIX,google.com", body)
+        self.assertIn("DOMAIN,storage.googleapis.com,出口选择", body)
+        self.assertIn("GEOSITE,geolocation-!cn,出口选择", body)
+        params = (self.root / "c-single/PARAMS.txt").read_text(encoding="utf-8")
+        self.assertNotIn("pw-test-value", params)
+        self.assertNotIn("CUSTOM_NODE", params)
+
+    def test_custom_protocols_trojan_and_shadowsocks_plus_raw_proxy(self):
+        # Real-world case: main exit is Trojan, Google exit reuses an existing Shadowsocks (ss) node, plus raw proxy dict.
+        nodes = self.root / "multi-proto.json"
+        nodes.write_text(json.dumps({
+            "NODE1_TYPE": "trojan",
+            "NODE1_NAME": "日本Trojan",
+            "NODE1_SERVER": "jp.example.com",
+            "NODE1_PORT": 443,
+            "NODE1_PASSWORD": "pw-jp",
+            "NODE1_SNI": "jp.example.com",
+            "NODE2_TYPE": "ss",
+            "NODE2_NAME": "新加坡SS",
+            "NODE2_SERVER": "sg.example.com",
+            "NODE2_PORT": 8388,
+            "NODE2_CIPHER": "aes-256-gcm",
+            "NODE2_PASSWORD": "pw-sg",
+            "NODE3_PROXY": {
+                "name": "备用Hysteria2",
+                "type": "hysteria2",
+                "server": "hy2.example.com",
+                "port": 8443,
+                "password": "pw-hy2",
+                "sni": "hy2.example.com",
+            },
+        }), encoding="utf-8")
+        values = dict(self.values(), **render.load_nodes(nodes))
+        render.render_component("clash", values, self.root / "c-proto")
+        text = (self.root / "c-proto/templates/clash-profile.template.yaml").read_text(encoding="utf-8")
+        self.assertNotIn("{{", text)
+        self.assertIn("type: 'ss'", text)
+        self.assertIn("cipher: 'aes-256-gcm'", text)
+        self.assertIn("type: 'hysteria2'", text)
+        self.assertIn("DOMAIN-SUFFIX,google.com,Google出口", text)
+        self.assertEqual(text.count("- '新加坡SS'"), 2)
+        self.assertEqual(text.count("- '备用Hysteria2'"), 2)
+
+        # Reject DIRECT/REJECT in NODEk_PROXY and reject NODE3 without NODE2.
+        bad = self.root / "bad-direct.json"
+        bad.write_text(json.dumps({"NODE1_PROXY": {"name": "bad", "type": "direct", "server": "x.example.com", "port": 443}}), encoding="utf-8")
+        with self.assertRaises(render.RenderError):
+            render.load_nodes(bad)
+        bad_n3 = self.root / "bad-n3.json"
+        bad_n3.write_text(json.dumps({
+            "NODE1_TYPE": "ss", "NODE1_NAME": "n1", "NODE1_SERVER": "a.example.com", "NODE1_PORT": 8388, "NODE1_CIPHER": "aes-256-gcm", "NODE1_PASSWORD": "p",
+            "NODE3_TYPE": "ss", "NODE3_NAME": "n3", "NODE3_SERVER": "b.example.com", "NODE3_PORT": 8388, "NODE3_CIPHER": "aes-256-gcm", "NODE3_PASSWORD": "p",
+        }), encoding="utf-8")
+        with self.assertRaises(render.RenderError):
+            render.load_nodes(bad_n3)
+
 
 if __name__ == "__main__":
     unittest.main()

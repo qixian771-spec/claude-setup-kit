@@ -156,6 +156,246 @@ def load_params(manifest_path, overrides, lookup_iface=True):
     return values
 
 
+FORBIDDEN_PROXY_TYPES = {"direct", "reject", "reject-drop", "pass", "dns"}
+
+
+def _as_bool(val, default=False):
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _yaml_scalar(val):
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, float):
+        return str(val)
+    s = str(val)
+    if "\n" in s or "\r" in s:
+        raise RenderError("节点字段值不能含换行符")
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _yaml_mapping_lines(mapping, indent):
+    lines = []
+    pad = " " * indent
+    for k, v in mapping.items():
+        if v is None:
+            continue
+        key = str(k).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", key):
+            raise RenderError("非法 Clash 节点字段名: %r" % k)
+        if isinstance(v, dict):
+            if not v:
+                continue
+            lines.append("%s%s:" % (pad, key))
+            lines.extend(_yaml_mapping_lines(v, indent + 2))
+        elif isinstance(v, list):
+            if not v:
+                continue
+            lines.append("%s%s:" % (pad, key))
+            for item in v:
+                if isinstance(item, (dict, list)):
+                    raise RenderError("字段 %s 的列表元素只支持标量" % key)
+                lines.append("%s- %s" % (" " * (indent + 2), _yaml_scalar(item)))
+        else:
+            lines.append("%s%s: %s" % (pad, key, _yaml_scalar(v)))
+    return lines
+
+
+def _format_proxy_yaml(proxy, label):
+    if not isinstance(proxy, dict):
+        raise RenderError("%s 必须是 JSON 对象" % label)
+    name = str(proxy.get("name", "")).strip()
+    ptype = str(proxy.get("type", "")).strip().lower()
+    server = str(proxy.get("server", "")).strip()
+    raw_port = proxy.get("port")
+    if not name or not ptype or not server or raw_port is None or raw_port == "":
+        raise RenderError("%s 缺少必填字段 name / type / server / port" % label)
+    if ptype in FORBIDDEN_PROXY_TYPES:
+        raise RenderError("%s 的 type 不能是 %s" % (label, ptype))
+    try:
+        port = int(str(raw_port).strip())
+    except ValueError:
+        raise RenderError("%s 的 port 必须是整数: %r" % (label, raw_port))
+    if not (1 <= port <= 65535):
+        raise RenderError("%s 的 port 超出 1..65535: %d" % (label, port))
+    ordered = {"name": name, "type": ptype, "server": server, "port": port}
+    for k, v in proxy.items():
+        if k not in ("name", "type", "server", "port"):
+            ordered[k] = v
+    raw_lines = _yaml_mapping_lines(ordered, 2)
+    first = "- " + raw_lines[0][2:]
+    return name, "\n".join([first] + raw_lines[1:])
+
+
+def _build_typed_proxy(slot, data):
+    prefix = "NODE%d_" % slot
+    raw_type = str(data.get(prefix + "TYPE", "")).strip().lower()
+    type_aliases = {"shadowsocks": "ss", "hy2": "hysteria2"}
+    ptype = type_aliases.get(raw_type, raw_type)
+
+    def req(suffix):
+        val = data.get(prefix + suffix)
+        if val is None or str(val).strip() == "":
+            raise RenderError("NODE%d (%s) 缺少 %s%s" % (slot, ptype, prefix, suffix))
+        return str(val).strip()
+
+    def opt(suffix):
+        val = data.get(prefix + suffix)
+        if val is None or str(val).strip() == "":
+            return None
+        return val
+
+    proxy = {
+        "name": req("NAME"),
+        "type": ptype,
+        "server": req("SERVER"),
+        "port": req("PORT"),
+    }
+    if ptype == "ss":
+        proxy["cipher"] = req("CIPHER")
+        proxy["password"] = req("PASSWORD")
+        proxy["udp"] = _as_bool(opt("UDP"), True)
+        if opt("PLUGIN"):
+            proxy["plugin"] = str(opt("PLUGIN")).strip()
+        if isinstance(data.get(prefix + "PLUGIN_OPTS"), dict):
+            proxy["plugin-opts"] = data[prefix + "PLUGIN_OPTS"]
+    elif ptype == "trojan":
+        proxy["password"] = req("PASSWORD")
+        if opt("SNI"):
+            proxy["sni"] = str(opt("SNI")).strip()
+        proxy["skip-cert-verify"] = _as_bool(opt("SKIP_CERT_VERIFY"), False)
+        proxy["udp"] = _as_bool(opt("UDP"), True)
+        if opt("NETWORK"):
+            proxy["network"] = str(opt("NETWORK")).strip()
+        if opt("WS_PATH") or opt("WS_HOST"):
+            ws = {}
+            if opt("WS_PATH"):
+                ws["path"] = str(opt("WS_PATH")).strip()
+            if opt("WS_HOST"):
+                ws["headers"] = {"Host": str(opt("WS_HOST")).strip()}
+            proxy["ws-opts"] = ws
+    elif ptype == "vless":
+        proxy["uuid"] = req("UUID")
+        proxy["network"] = str(opt("NETWORK") or "tcp").strip()
+        proxy["tls"] = _as_bool(opt("TLS"), True)
+        proxy["udp"] = _as_bool(opt("UDP"), True)
+        if opt("FLOW"):
+            proxy["flow"] = str(opt("FLOW")).strip()
+        elif opt("REALITY_PUBLIC_KEY") and proxy["network"] == "tcp":
+            proxy["flow"] = "xtls-rprx-vision"
+        sni = opt("SNI") or opt("SERVERNAME") or opt("HOST")
+        if sni:
+            proxy["servername"] = str(sni).strip()
+        proxy["client-fingerprint"] = str(opt("CLIENT_FINGERPRINT") or "chrome").strip()
+        if opt("SKIP_CERT_VERIFY") is not None:
+            proxy["skip-cert-verify"] = _as_bool(opt("SKIP_CERT_VERIFY"), False)
+        if opt("REALITY_PUBLIC_KEY"):
+            ropts = {
+                "public-key": str(opt("REALITY_PUBLIC_KEY")).strip(),
+                "support-x25519mlkem768": True,
+            }
+            if opt("REALITY_SHORT_ID") is not None:
+                ropts["short-id"] = str(opt("REALITY_SHORT_ID")).strip()
+            proxy["reality-opts"] = ropts
+        if opt("WS_PATH") or opt("WS_HOST"):
+            ws = {}
+            if opt("WS_PATH"):
+                ws["path"] = str(opt("WS_PATH")).strip()
+            if opt("WS_HOST"):
+                ws["headers"] = {"Host": str(opt("WS_HOST")).strip()}
+            proxy["ws-opts"] = ws
+    elif ptype == "vmess":
+        proxy["uuid"] = req("UUID")
+        proxy["alterId"] = int(str(opt("ALTERID") or "0").strip())
+        proxy["cipher"] = str(opt("CIPHER") or "auto").strip()
+        proxy["udp"] = _as_bool(opt("UDP"), True)
+        if opt("TLS") is not None:
+            proxy["tls"] = _as_bool(opt("TLS"), False)
+        if opt("NETWORK"):
+            proxy["network"] = str(opt("NETWORK")).strip()
+        sni = opt("SNI") or opt("SERVERNAME")
+        if sni:
+            proxy["servername"] = str(sni).strip()
+        if opt("WS_PATH") or opt("WS_HOST"):
+            ws = {}
+            if opt("WS_PATH"):
+                ws["path"] = str(opt("WS_PATH")).strip()
+            if opt("WS_HOST"):
+                ws["headers"] = {"Host": str(opt("WS_HOST")).strip()}
+            proxy["ws-opts"] = ws
+    elif ptype in ("socks5", "http"):
+        if opt("USERNAME") is not None:
+            proxy["username"] = str(opt("USERNAME"))
+        if opt("PASSWORD") is not None:
+            proxy["password"] = str(opt("PASSWORD"))
+        if opt("TLS") is not None:
+            proxy["tls"] = _as_bool(opt("TLS"), False)
+        if opt("SKIP_CERT_VERIFY") is not None:
+            proxy["skip-cert-verify"] = _as_bool(opt("SKIP_CERT_VERIFY"), False)
+        if ptype == "socks5":
+            proxy["udp"] = _as_bool(opt("UDP"), False)
+    elif ptype == "hysteria2":
+        proxy["password"] = req("PASSWORD")
+        if opt("SNI"):
+            proxy["sni"] = str(opt("SNI")).strip()
+        proxy["skip-cert-verify"] = _as_bool(opt("SKIP_CERT_VERIFY"), False)
+        if opt("OBFS"):
+            proxy["obfs"] = str(opt("OBFS")).strip()
+        if opt("OBFS_PASSWORD"):
+            proxy["obfs-password"] = str(opt("OBFS_PASSWORD"))
+        if opt("UP"):
+            proxy["up"] = str(opt("UP")).strip()
+        if opt("DOWN"):
+            proxy["down"] = str(opt("DOWN")).strip()
+    elif ptype in ("tuic", "anytls"):
+        if ptype == "tuic":
+            proxy["uuid"] = req("UUID")
+        proxy["password"] = req("PASSWORD")
+        if opt("SNI"):
+            proxy["sni"] = str(opt("SNI")).strip()
+        proxy["udp"] = _as_bool(opt("UDP"), True)
+    else:
+        raise RenderError(
+            "NODE%d_TYPE=%r 暂未内置字段映射；可直接传 \"NODE%d_PROXY\": {<Clash proxies 原样对象>} 支持任意 Clash 协议"
+            % (slot, raw_type, slot)
+        )
+    return _format_proxy_yaml(proxy, "NODE%d" % slot)
+
+
+def normalize_nodes(data):
+    if not isinstance(data, dict) or not data or not all(re.fullmatch(r"NODE[1-4]_[A-Z0-9_]+", str(k)) for k in data):
+        raise RenderError("--nodes 文件必须是 {\"NODE1_NAME\": ..., \"NODE1_SERVER\": ...} 或 {\"NODE1_PROXY\": {...}} 这样的 JSON 对象")
+    out = {}
+    for slot in (1, 2, 3):
+        prefix = "NODE%d_" % slot
+        slot_keys = [k for k in data if k.startswith(prefix)]
+        if not slot_keys:
+            continue
+        if prefix + "PROXY" in data:
+            name, yaml_block = _format_proxy_yaml(data[prefix + "PROXY"], prefix + "PROXY")
+            out[prefix + "NAME"] = name
+            out["CUSTOM_NODE%d" % slot] = yaml_block
+        elif prefix + "TYPE" in data:
+            name, yaml_block = _build_typed_proxy(slot, data)
+            out[prefix + "NAME"] = name
+            out["CUSTOM_NODE%d" % slot] = yaml_block
+        else:
+            for k in slot_keys:
+                out[k] = str(data[k])
+    for k in data:
+        if k.startswith("NODE4_"):
+            out[k] = str(data[k])
+    if "NODE3_NAME" in out and "NODE2_NAME" not in out:
+        raise RenderError("提供了 NODE3 但未提供 NODE2；第 2 个节点请使用 NODE2_*")
+    return out
+
+
 def load_nodes(path):
     if not Path(path).is_file():
         raise RenderError("--nodes 文件不存在: %s" % path)
@@ -163,9 +403,7 @@ def load_nodes(path):
         data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     except ValueError as exc:
         raise RenderError("--nodes 不是合法 JSON: %s" % exc)
-    if not isinstance(data, dict) or not all(re.fullmatch(r"NODE\d+_[A-Z_]+", k) for k in data):
-        raise RenderError("--nodes 文件必须是 {\"NODE1_NAME\": ..., \"NODE1_SERVER\": ...} 这样的 JSON 对象")
-    return {k: str(v) for k, v in data.items()}
+    return normalize_nodes(data)
 
 
 def apply_conditionals(text, values, source):
@@ -196,13 +434,17 @@ def apply_conditionals(text, values, source):
 
 
 def render_text(text, values, source):
-    text = apply_conditionals(text, values, source)
+    vals = dict(values)
+    for slot in (1, 2, 3):
+        if ("NODE%d_NAME" % slot) in vals and ("CUSTOM_NODE%d" % slot) not in vals:
+            vals["DEFAULT_NODE%d" % slot] = "1"
+    text = apply_conditionals(text, vals, source)
 
     def sub(match):
         key = match.group(1)
-        if key not in values:
+        if key not in vals:
             raise RenderError("%s: 没有参数可填 {{%s}}" % (source, key))
-        return values[key]
+        return vals[key]
     return PLACEHOLDER.sub(sub, text)
 
 
@@ -254,7 +496,11 @@ def _render_into(name, values, out_dir):
         leftovers += ["%s: {{%s}}" % (rel, m) for m in PLACEHOLDER.findall(text)]
     if leftovers:
         raise RenderError("渲染后仍有占位符: " + "; ".join(leftovers))
-    summary = "\n".join("%s=%s" % (k, v) for k, v in values.items() if not k.startswith("NODE"))
+    summary = "\n".join(
+        "%s=%s" % (k, v)
+        for k, v in values.items()
+        if not k.startswith(("NODE", "CUSTOM_NODE", "DEFAULT_NODE"))
+    )
     # BOM so Windows PowerShell/Notepad read the Chinese adapter names correctly; harmless on macOS.
     (out_dir / "PARAMS.txt").write_text("component=%s\n%s\n" % (name, summary), encoding="utf-8-sig")
     return written

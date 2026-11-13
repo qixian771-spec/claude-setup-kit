@@ -26,7 +26,7 @@ Windows 上把 `python3` 换成 `py -3`，脚本路径用正斜杠（`py -3 scri
 
 退出码的意思：`mirror_check` 0 = 全 ✅，1 = 有 ❌，2 = 有 ❓；`next_step` **3 = 正常，打印了现在要做的那一步**，0 = 全部步骤通过去做 ippure，2 = 跑不了（manifest 不一致或 mirror_check 崩了）。看到 3 不是失败。
 
-然后问用户一句话（已经说过的不要再问）："你要的是哪种：**A 建节点**（还没有可用节点）、**B 配这台 Mac**（已有节点）、**C 清理重置 / 换账号 / 补遥测开关**、**D 全套从零**？" 以及出口节点名、是否同意装防火墙规则与描述文件、是否同意关 IPv6；**Windows 还要问时区**：一键安装会把系统时区改成 `mirror.params.json` 里 `timezone_win` 的值（默认 `Pacific Standard Time`，美国太平洋），用户要别的就先写进去，不想改就不用一键、分步跳过 S7。
+然后问用户一句话（已经说过的不要再问）："你要的是哪种：**A 建节点**（还没有可用节点）、**B 配这台 Mac**（已有节点）、**C 清理重置 / 换账号 / 补遥测开关 / 拆检更新包**、**D 全套从零**？" 以及出口节点名、是否同意装防火墙规则与描述文件、是否同意关 IPv6、**是否要开启可选的『禁止 Claude Desktop 自动更新』策略**（可选项，**必须按推荐项二选一简单询问用户，默认不锁**：`1. 不关闭自动更新（推荐）` / `2. 关闭自动更新` —— **原因**：保持正常更新不易因版本太旧受限，只有赶工怕后台闲置自动重启时才选关闭；若 `desktop.updater` 对账发现本机已有待装更新包或用户关心此次更新是否安全，AI 必须先克隆并运行 `claude-client-full-reset/scripts/desktop_update_audit.py`，用大白话向用户说清楚**① 此次更新包具体改了什么**以及**② 结合这台机器当前状态与单/双通道分流的综合判断**，再按上述二选一请用户决定）；**Windows 还要问时区**：一键安装会把系统时区改成 `mirror.params.json` 里 `timezone_win` 的值（默认 `Pacific Standard Time`，美国太平洋），用户要别的就先写进去，不想改就不用一键、分步跳过 S7。
 
 仓库根目录的 `AGENTS.md` 是账号级的通用交付标准，它自己写明"不授予额外写入/发布权限、遵守本仓库具体规则"——所以下面的硬规则优先，尤其是"要密码的安装由用户双击"，AI 不自己 sudo。
 
@@ -36,13 +36,23 @@ Windows 上把 `python3` 换成 `py -3`，脚本路径用正斜杠（`py -3 scri
 
 | 路线 | 进入条件 | 做什么 | 产出 | 交回总入口时带什么 |
 |---|---|---|---|---|
-| **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：键名用本仓库 `templates/clash-profile.template.yaml` 里的 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（NODE1 是 VLESS-REALITY；trojan 用 `NODE2_NAME`、`NODE2_SERVER`、`NODE2_PORT`、`NODE2_PASSWORD`、`NODE2_SNI`；socks5 用 `NODE3_NAME`、`NODE3_SERVER`、`NODE3_PORT`、`NODE3_USERNAME`、`NODE3_PASSWORD`；可选的 CDN 备用入口用 `NODE4_NAME`、`NODE4_SERVER`（Cloudflare 优选 IP）、`NODE4_PORT`（443）、`NODE4_UUID`、`NODE4_HOST`（域名）、`NODE4_PATH`——做法见 [references/cdn-backup.md](references/cdn-backup.md)；`render.py` 对缺的键直接报错；NODE1 和 NODE2 必填，NODE3/NODE4 可选——不给对应的键时它们的代理和分组成员会被整个去掉）；文件放私有目录，**不进任何仓库** |
+| **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：默认字段 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（也支持用 `NODE1_TYPE` 或 `NODE1_PROXY` 填任意 Clash 协议如 Trojan / Shadowsocks `ss` / SOCKS5 / VMess / Hysteria2；**只有 `NODE1` 必填**，`NODE2`/`NODE3`/`NODE4` 均可选：`NODE2` 只在主出口被 Google 误判成中国时填任意协议的第 2 节点给 Google 分流；可选 CDN 备用入口 `NODE4` 见 [references/cdn-backup.md](references/cdn-backup.md)；不给可选节点时它们的代理、分组和规则会自动整段去掉）；文件放私有目录，**不进任何仓库** |
 | **B 配 Mac** | 有节点参数；macOS | 本仓库 [执行手册](references/runbook.md) S1–S12；每做完一步跑 `python3 scripts/next_step.py`，它会说下一步做什么 | `mirror_check` 全 ✅ + ippure 四项 | 全量对账表、日志路径、截图 |
 | **B′ 配 Windows 10/11** | 有节点参数；Windows | 本仓库 [Windows 手册](references/runbook-windows.md) S1–S9；命令用 `py -3 scripts/mirror_check.py`、`py -3 scripts/next_step.py`；S1 之后双击 `installers\win\一键安装全部.cmd`（一次 UAC 装完 S2–S7）。装好后**保持安装状态**；只有用户明确说要打游戏或要撤掉防护时，才让用户双击 `一键撤回全部.cmd`（撤回后 `wf.*` ❌ 是预期） | 同 B | 同 B |
-| **C 清理重置** | 换账号、封号后重来、要关遥测/补分流 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则 | 清理验收 + 标识对比表 | `identifiers.py --compare` 退出 0 的输出 |
+| **C 清理重置** | 换账号、封号后重来、要关遥测/补分流、提示重启更新想先验包 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则；`desktop_update_audit.py` 只读拆检本地暂存更新包并结合本机状态给出判断 | 清理验收 + 标识对比表 / 更新包审计结论 | `identifiers.py --compare` 退出 0 的输出（或 `desktop_update_audit.py` 报告） |
 | **D 全套从零** | 新机器或要"和参考机一模一样" | 顺序：C（可选，只在有旧数据时）→ A（没有节点时）→ B → ippure | 同 B | 同 B |
 
-路线之间的衔接：A 的产出直接喂给 B 的 S1（`render.py --component clash --nodes <JSON>`）——**至少要两个节点，而且协议是写死的**：`NODE1` 必须是 VLESS-REALITY（A 路线建出来的就是它）给 Claude 固定出口；`NODE2` 必须是 trojan（可再加 `NODE3` socks5）给 Google 系域名用的 `Google出口` 分组。只有一个 VLESS 节点的用户要另外提供一个 trojan 节点（同一台 VPS 上加一个 trojan 入站也行，但出口 IP 一样，解决不了 Gemini 判地区）；协议对不上就停下来说明，不要自己改模板；用订阅链接的用户先问能不能给出单个节点的参数。**NODE4 的两条铁规**：它必须是 NODE1 **同一台服务器**的 CDN 入口（出口 IP 相同），才能放进「出口选择」当备用成员；指向别的服务器的 CDN 节点出口不同，**不准**进「出口选择」（Claude 规则会走到它）。它平时不选中，只在直连被墙时由用户手动切换；而且要 mihomo ≥ 1.19.29（`clash.xhttp_core` 会查，Windows 的 Clash Verge 2.4.4 不行）。为什么要第二个节点：因为 Google 的地理库常把面向国内用户的机房 IP 判成中国，Gemini 会提示"不支持该地区"；Claude 出口不受影响。C 做完后 B 的 S9（Chrome）与 S1 都要重新对账，因为清理会动浏览器与 Clash 之外的 Claude 数据但不动系统防护。
+路线之间的衔接：A 的产出或用户已有的节点参数喂给 B 的 S1（`render.py --component clash --nodes <JSON>`）：
+1. **节点数量与协议都不锁死（1 个节点就能跑，任意 Clash 协议都支持）**：
+   - 用户如果已有现成节点（不管是 VLESS-REALITY、Trojan、Shadowsocks `ss`、SOCKS5、VMess、Hysteria2，还是旧 Clash 配置文件里的 `proxies` 节点对象），直接用 `NODE1_TYPE`（如 `"trojan"` / `"ss"`）或 `"NODE1_PROXY": {<原样节点对象>}` 渲染即可，**绝不要因为协议不是 VLESS/Trojan 就卡住用户或要求换协议**。
+   - 真正的硬规则只有一条：**Claude 的 `出口选择` 必须固定锁死在同一个主出口节点（`exit_node`），绝不含 `DIRECT`、绝不自动轮换**。
+2. **Google 分流采用『智能按需法』（不强制所有人配第 2 个节点）**：
+   - 参考机之所以单独设 `Google出口`，唯一原因是部分机房 IP 会被 Google 地理库误判成中国/香港（俗称"送中 IP"，会导致 Gemini 报"不支持该地区"）。
+   - **怎么智能判断**：
+     - 如果用户**只有 1 个节点**：只填 `NODE1`（不填 `NODE2`），模板自动按**单出口模式**生成（无 `Google出口` 分组，Google 随主出口走，`clash.google_exit` 对账记 `ℹ️` 正常通过），**不要强迫用户再找第 2 个节点**。
+     - 如果用户手里**有其他现成节点**（例如旧配置里存的 Shadowsocks / Trojan / VLESS 等）：在主出口跑通后，可只读测一下 Google 对主出口的地区判定（如 `curl -sS -m 5 https://www.youtube.com/sw.js_data | grep -oE '"[A-Z]{2}"' | head -n 5`，Windows 用 `curl.exe`）或问用户平时开 Gemini 会不会提示不支持地区。**没被误判成 CN/HK 时直接保持单出口共用即可**；**只有被 Google 误判成 CN/HK（或用户明确想把 Google 分开）时**，才把另一个节点填进 `NODE2`（同样支持 `"NODE2_TYPE": "ss"` 或 `"NODE2_PROXY": {...}` 等任意协议）给 `Google出口` 用，主出口仍固定不动（`storage.googleapis.com`/`fonts.*` 精确规则仍在 Google 后缀之前，继续走主出口）。若用户明确要求强制对账独立 Google 出口，再在 `mirror.params.json` 设 `"google_split_required": true`。
+3. **NODE4 的两条铁规**：它必须是 NODE1 **同一台服务器**的 CDN 入口（出口 IP 相同），才能放进「出口选择」当备用成员；指向别的服务器的 CDN 节点出口不同，**不准**进「出口选择」（Claude 规则会走到它）。它平时不选中，只在直连被墙时由用户手动切换；而且要 mihomo ≥ 1.19.29（`clash.xhttp_core` 会查，Windows 的 Clash Verge 2.4.4 不行）。
+4. C 做完后 B 的 S9（Chrome）与 S1 都要重新对账，因为清理会动浏览器与 Clash 之外的 Claude 数据但不动系统防护。
 
 ## 2. 在 B 路线里你每一轮只做这三件事
 

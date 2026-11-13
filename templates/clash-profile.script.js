@@ -53,6 +53,18 @@ function main(config) {
     "+.claudemcpcontent.com": [
       "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
     ],
+    "+.withpersona.com": [
+      "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
+    ],
+    "+.persona.com": [
+      "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
+    ],
+    "+.stripe.network": [
+      "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
+    ],
+    "+.workos.com": [
+      "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
+    ],
     "+.sentry.io": [
       "https://1.1.1.1/dns-query#{{EXIT_GROUP}}"
     ],

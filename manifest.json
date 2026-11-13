@@ -112,8 +112,14 @@
       "gstatic.com",
       "googleusercontent.com"
     ],
-    "google_group_note": "Google's geolocation often classifies hosting IPs used by Chinese customers as China/HK (Gemini: region not supported). Google traffic therefore uses a separate select group whose current member must not be the Claude exit node.",
-    "clash_base_config": "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml"
+    "google_split_required": false,
+    "google_group_note": "Smart on-demand mode (false by default): separate Google出口 is only needed when Google's GeoIP misclassifies the main Claude exit IP as China/HK ('送中', Gemini: region not supported) and a second node (any Clash protocol: SS/Trojan/VLESS/SOCKS5/etc.) is available. Single-exit mode (group absent or pointing to exit_node) reports INFO; set google_split_required=true to enforce a separate Google exit.",
+    "clash_base_config": "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml",
+    "claude_desktop_app": "/Applications/Claude.app",
+    "claude_desktop_profile_identifier": "local.claude-mac-env-mirror.claude-desktop",
+    "claude_desktop_policy_key": "HKLM:\\SOFTWARE\\Policies\\Claude",
+    "desktop_block_updates_required": false,
+    "desktop_block_updates_note": "Optional: false by default (desktop.updater returns INFO and never forces locking updates). Only set true in mirror.params.json when the user explicitly opts in after reviewing the update package audit."
   },
   "components": [
     {
@@ -213,14 +219,14 @@
     {
       "id": "clash.google_exit",
       "layer": "代理",
-      "title": "Google 专用分组：存在、无 DIRECT、不等于 Claude 出口，四条 Google 规则排在 GEOSITE 之前",
+      "title": "Google 分流（智能按需）：单出口共用记 ℹ️；拆分时无 DIRECT、非主出口且规则排在 GEOSITE 前",
       "check": "clash_google_exit",
       "platforms": [
         "darwin",
         "win32"
       ],
-      "next": "按 templates/clash-profile.template.yaml 加 Google出口 分组（成员 = 主出口以外的节点）并把 4 条 DOMAIN-SUFFIX 规则放在 storage/fonts 精确规则之后、GEOSITE 之前；分组里选一个不是 Claude 出口的节点。Google 把很多机房 IP 判成中国，Gemini 会报“不支持该地区”。",
-      "next_win": "同 macOS：在 Clash Verge 里导入渲染后的模板，代理页把 Google出口 选成主出口以外的节点。"
+      "next": "确保 google.com 等后缀不走 DIRECT。若设置了 Google出口 分组，成员不能含 DIRECT/REJECT，且 4 条 DOMAIN-SUFFIX 规则须排在 storage/fonts 精确规则之后、GEOSITE 之前；主出口被 Google 误判中国（送中）时在代理页把 Google出口 选成任意协议的其他节点（SS/Trojan/VLESS/SOCKS5 均可），未被误判或只有单节点时可不设 Google出口（单出口模式记 ℹ️）。",
+      "next_win": "同 macOS：确保 Google 后缀不走 DIRECT；只有主出口被 Google 误判中国且有第 2 节点时才需把 Google出口 选成其他节点（任意 Clash 支持的协议均可），否则保持单出口共用即可。"
     },
     {
       "id": "clash.dns",
@@ -651,6 +657,18 @@
       "next_win": "可选：设置 → 时间和语言 → 语言：把 English 调到首位。"
     },
     {
+      "id": "desktop.updater",
+      "layer": "客户端",
+      "title": "Claude Desktop 待装更新与禁自动更新策略（可选项，需询问用户并结合包审计说明）",
+      "check": "desktop_updater",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next": "禁止自动更新是可选项（必须先询问用户，不可默认开启）：发现待装更新或用户关心更新安全时，先运行 claude-client-full-reset 的 scripts/desktop_update_audit.py 只读检测更新包，向用户说明此次更新包内容并结合本机情况给出判断；仅在用户明确选择锁死自动更新时，才双击 installers/Claude禁自动更新.mobileconfig 并到 系统设置 → 通用 → 设备管理 安装。",
+      "next_win": "禁止自动更新是可选项（必须先询问用户，不可默认开启）：发现待装更新或用户关心更新安全时，先运行 claude-client-full-reset 的 scripts/desktop_update_audit.py 只读检测更新包，向用户说明此次更新包内容并结合本机情况给出判断；仅在用户明确选择锁死自动更新时，才双击 installers\\win\\Claude禁自动更新.reg 导入注册表策略。"
+    },
+    {
       "id": "wf.enabled",
       "layer": "防火墙",
       "title": "Windows 防火墙三个配置文件都启用",
@@ -803,9 +821,9 @@
       ],
       "requires": [],
       "installer": null,
-      "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A 建节点）",
-      "user_action": "安装 Clash Verge（macOS）→ 设置 → 服务模式 → 安装（TUN 需要）→ 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式、系统代理开、DNS 覆写关；代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
-      "say": "先把 Clash 配成参考机的样子：把节点参数给我，我生成配置文件，你在 Clash Verge 里导入、开 TUN、选出口节点和 Google 用的节点。"
+      "ai_action": "python3 scripts/render.py --component clash --nodes <节点参数.json>（支持单节点或任意 Clash 协议；主出口被 Google 误判中国且有第 2 节点时再配 NODE2 给 Google 分流，没有节点先走 START.md 路线 A）",
+      "user_action": "安装 Clash Verge（macOS）→ 设置 → 服务模式 → 安装（TUN 需要）→ 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选：模板已自带同样的 DNS 和 STUN 规则）；设置里开 TUN 模式、系统代理开、DNS 覆写关；代理页把出口分组选到出口节点（若因主出口送中开启了 Google出口，再把 Google出口 选成另一节点）",
+      "say": "先把 Clash 配成参考机的样子：把现有的节点参数给我（1 个就够，Trojan/SS/VLESS 等协议都支持；只有主出口被 Google 误判成中国时才需要第 2 个节点分流 Google），我生成配置文件，你在 Clash Verge 里导入、开 TUN、选定出口节点。"
     },
     {
       "id": "S2",
@@ -941,17 +959,19 @@
     },
     {
       "id": "S10",
-      "title": "系统时区（语言可选）",
+      "title": "系统时区（语言与禁自动更新可选）",
       "components": [
-        "sys.timezone"
+        "sys.timezone",
+        "desktop.updater"
       ],
       "info": [
         "sys.language"
       ],
       "requires": [],
       "installer": null,
-      "user_action": "系统设置 → 通用 → 日期与时间 → 关自动设置 → 选节点所在时区",
-      "say": "把系统时区改成节点所在的时区：系统设置 → 通用 → 日期与时间。语言顺序可改可不改，你定。"
+      "ai_action": "若 desktop.updater 发现待装更新包或用户关心更新安全，先调用 claude-client-full-reset/scripts/desktop_update_audit.py 检测更新包并结合本机情况向用户说明改动内容与安全判断，再询问是否开启可选的禁止自动更新策略（默认不锁）",
+      "user_action": "系统设置 → 通用 → 日期与时间 → 关自动设置 → 选节点所在时区（语言与 Claude禁自动更新.mobileconfig 均为可选项，按本人意愿决定）",
+      "say": "把系统时区改成节点所在的时区：系统设置 → 通用 → 日期与时间。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项（如果有下载好的更新包，我会先帮你拆检说明包里改了什么并结合你本机情况给出判断，再由你定要不要锁更新）。"
     },
     {
       "id": "S11",
@@ -1003,7 +1023,8 @@
     "chrome_app": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "edge_app": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "timezone_win": "Pacific Standard Time",
-    "clash_base_config": "%APPDATA%/io.github.clash-verge-rev.clash-verge-rev/config.yaml"
+    "clash_base_config": "%APPDATA%/io.github.clash-verge-rev.clash-verge-rev/config.yaml",
+    "claude_desktop_app": "%LOCALAPPDATA%/AnthropicClaude/Claude.exe"
   },
   "steps_win": [
     {
@@ -1027,9 +1048,9 @@
       ],
       "requires": [],
       "installer": null,
-      "ai_action": "py -3 scripts/render.py --component clash --nodes <节点参数.json>（没有节点先走 START.md 路线 A）",
-      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式、系统代理开、DNS 覆写关 → 代理页把出口分组选到出口节点，把 Google出口 选成主出口以外的节点",
-      "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我，我生成配置；你在 Clash Verge 里装服务模式、导入、开 TUN、选出口节点和 Google 用的节点。"
+      "ai_action": "py -3 scripts/render.py --component clash --nodes <节点参数.json>（支持单节点或任意 Clash 协议；主出口送中且有第 2 节点时再配 NODE2，没有节点先走 START.md 路线 A）",
+      "user_action": "安装 Clash Verge（Windows）→ 设置 → 安装服务模式 → 配置 → 新建(Local) 导入渲染出的 yaml → 点这张卡设为当前（脚本可选） → 设置里开 TUN 模式、系统代理开、DNS 覆写关 → 代理页把出口分组选到出口节点（若开启了 Google出口，再把它选成主出口以外的节点）",
+      "say": "先把 Clash Verge 配成参考机的样子：把节点参数给我（1 个就够，任意 Clash 协议都支持；只有主出口被 Google 误判中国时才需第 2 节点分流 Google），我生成配置；你在 Clash Verge 里装服务模式、导入、开 TUN、选定出口节点。"
     },
     {
       "id": "S2",
@@ -1107,9 +1128,10 @@
     },
     {
       "id": "S7",
-      "title": "系统时区（语言可选）",
+      "title": "系统时区（语言与禁自动更新可选）",
       "components": [
-        "sys.timezone"
+        "sys.timezone",
+        "desktop.updater"
       ],
       "info": [
         "sys.language"
@@ -1117,8 +1139,8 @@
       "requires": [],
       "installer": "installers\\win\\设置时区.cmd",
       "log": "设置时区",
-      "user_action": "双击 installers\\win\\设置时区.cmd（UAC），或 设置 → 时间和语言 → 日期和时间 手动选",
-      "say": "把系统时区改成节点所在的时区：双击“设置时区.cmd”。语言顺序可改可不改，你定。"
+      "user_action": "双击 installers\\win\\设置时区.cmd（UAC），或 设置 → 时间和语言 → 日期和时间 手动选（语言与 Claude禁自动更新.reg 均为可选项）",
+      "say": "把系统时区改成节点所在的时区：双击“设置时区.cmd”。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项（如果有待装更新包，我会先帮你拆检说明更新包内容并结合本机情况给出判断，再由你定要不要导入 Claude禁自动更新.reg）。"
     },
     {
       "id": "S8",
