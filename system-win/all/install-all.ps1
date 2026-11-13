@@ -37,7 +37,7 @@ Invoke-Logged $Log {
         if ($code -ne 0) { throw "$([IO.Path]::GetFileName($Script)) 退出码 $code" }
     }
 
-    Step '0/6 记录安装前状态（一键撤回照它恢复）' {
+    Step '0/7 记录安装前状态（一键撤回照它恢复）' {
         $snap = "$root\before.json"
         if (Test-Path $snap) { Write-Output "已有 $snap（保留最早的那份，不覆盖）" } else {
             $s = [ordered]@{
@@ -52,19 +52,31 @@ Invoke-Logged $Log {
             Write-Output "已写入 $snap"
         }
     }
+    Step '1/7 自动识别网卡与出口节点 + 补齐 Claude 14 项隐私静音开关' {
+        $pout = & py -3 scripts\auto_init.py 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "auto_init 失败: $($pout.TrimEnd())" }
+        Write-Output $pout.TrimEnd()
+    }
     # Steps already installed by an earlier run are verified and skipped, so the one-click run can be resumed.
-    Step '1/6 防火墙规则' {
+    Step '2/7 防火墙规则' {
         if (@(Get-NetFirewallRule -DisplayName 'claude-setup-kit: *' -ErrorAction SilentlyContinue | Where-Object Enabled -eq 'True').Count -eq 8) { Write-Output '已装（8 条规则都在且启用），跳过' }
         else { $b = Render 'win-firewall'; RunPs (Join-Path $b 'system-win\firewall\install-firewall.ps1') @('-Build', $b) }
     }
-    Step '2/6 自检守护 + IPv6 守护（计划任务）' {
+    Step '3/7 关闭网卡 IPv6 + 自检守护与 IPv6 守护（计划任务）' {
         $have = @('watch', 'ipv6-guard' | Where-Object { Get-ScheduledTask -TaskName "claude-setup-kit $_" -ErrorAction SilentlyContinue })
         $need = @('watch', 'ipv6-guard' | Where-Object { $have -notcontains $_ })
         if ($have) { Write-Output ('已装，跳过: ' + ($have -join ', ')) }
         if ($need.Count -eq 2) { $only = 'all' } elseif ($need.Count -eq 1) { $only = $need[0] } else { $only = $null }
         if ($only) { $b = Render 'win-tasks'; RunPs (Join-Path $b 'system-win\tasks\install-tasks.ps1') @('-Build', $b, '-Only', $only) }
+        else {
+            # Even when resuming with tasks already registered, enforce IPv6 off on all physical NICs immediately.
+            foreach ($nic in @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.HardwareInterface -eq $true } | ForEach-Object { $_.Name })) {
+                $b6 = Get-NetAdapterBinding -Name $nic -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+                if ($b6 -and $b6.Enabled) { Disable-NetAdapterBinding -Name $nic -ComponentID ms_tcpip6 -Confirm:$false; Write-Output "[OK] 已关闭 $nic 的 IPv6 绑定" }
+            }
+        }
     }
-    Step '3/6 Chrome / Edge 策略' {
+    Step '4/7 Chrome / Edge 策略' {
         # Same two values as installers\win\*策略.reg, written directly: reg.exe cannot open the Chinese-named .reg files.
         foreach ($key in 'HKLM:\SOFTWARE\Policies\Google\Chrome', 'HKLM:\SOFTWARE\Policies\Microsoft\Edge') {
             if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
@@ -76,11 +88,11 @@ Invoke-Logged $Log {
         }
     }
     $script:ToolsBuild = $null
-    Step '4/6 体检工具 claude-wall.ps1' {
+    Step '5/7 体检工具 claude-wall.ps1' {
         $script:ToolsBuild = Render 'win-tools'
         if (Test-Path (Join-Path $env:LOCALAPPDATA 'claude-setup-kit\claude-wall.ps1')) { Write-Output '已装，跳过' }
         else { RunPs (Join-Path $script:ToolsBuild 'system-win\tools\install-tools.ps1') @('-Build', $script:ToolsBuild) }
     }
-    Step '5/6 时区' { RunPs (Join-Path $script:ToolsBuild 'system-win\tools\set-timezone.ps1') @('-Build', $script:ToolsBuild) }
-    Step '6/6 完成' { Write-Output '[OK] 全部组件已安装。撤回：双击 installers\win\一键撤回全部.cmd' }
+    Step '6/7 时区' { RunPs (Join-Path $script:ToolsBuild 'system-win\tools\set-timezone.ps1') @('-Build', $script:ToolsBuild) }
+    Step '7/7 完成' { Write-Output '[OK] 全部组件已安装。撤回：双击 installers\win\一键撤回全部.cmd' }
 }

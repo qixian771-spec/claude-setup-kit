@@ -103,8 +103,9 @@ def decide(manifest, result):
             out = build(step, status, evidence, states)
             out["skipped"] = skipped
             return out
+    cmd_py = "py -3" if platform_key() == "win32" else "python3"
     return {"step": None, "state": "all_passed", "exit": 0, "skipped": skipped,
-            "ai_action": ("py -3 scripts/mirror_check.py" if platform_key() == "win32" else "python3 scripts/mirror_check.py") + "（贴全量输出）",
+            "ai_action": "%s scripts/finish_gate.py && %s scripts/mirror_check.py（贴通关核验单与全量输出）" % (cmd_py, cmd_py),
             "user_action": "用 Chrome 打开 https://ippure.com/claude.html，等跑完，截上半页和分数区两张图",
             "say": ("清单全部通过。" if not skipped else "清单里除了你没授权的 %s 以外全部通过（这几项会写进交付）。" % "、".join(skipped)) + "最后请用 Chrome 打开 ippure.com/claude.html，等它跑完截两张图，我按四项记录交付。",
             "doc": "references/ippure-acceptance.md"}
@@ -157,10 +158,10 @@ def params_hint(manifest_path, overrides=()):
     local = Path(manifest_path).parent / "mirror.params.json"
     if local.exists() or any(str(o).startswith("exit_node=") for o in overrides):
         return None
+    cmd_py = "py -3" if platform_key() == "win32" else "python3"
     return ("提醒: 仓库根目录没有 mirror.params.json，对账用的是参考机默认参数（出口节点 %s）。"
-            "先按 START.md 第 0 步写入本机参数（exit_node；Mac 已有 IPv6 守护的还要 ipv6_guard_label；"
-            "插网线的 Mac 和所有 Windows 要 network_services；用户不做的步骤写 skip_steps），再看下面的结果。"
-            % json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"])
+            "请先运行 `%s scripts/auto_init.py` 自动识别本机网卡/出口节点并补齐 14 项隐私开关（不做的步骤写进 skip_steps），再看下面的结果。"
+            % (json.loads(Path(manifest_path).read_text(encoding="utf-8"))["params"]["exit_node"], cmd_py))
 
 
 def render(out):

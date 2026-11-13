@@ -889,11 +889,18 @@ def check_exit_ip(host, p, a):
     return PASS, "出口 %s loc=%s colo=%s" % (data["ip"], data.get("loc"), data.get("colo"))
 
 
+def _dig_retry(host, extra, name, rtype="A", server="127.0.0.1"):
+    try:
+        return _dig(host, extra, name, rtype, server)
+    except HostError:
+        return _dig(host, extra, name, rtype, server)
+
+
 def check_dns_upstream(host, p, a):
     data = _trace(host, p)
-    who = _dig(host, ["CH"], "whoami.cloudflare", "TXT", "1.1.1.1")
+    who = _dig_retry(host, ["CH"], "whoami.cloudflare", "TXT", "1.1.1.1")
     who_ip = who[0].strip('"') if who else ""
-    resolver = _dig(host, [], "o-o.myaddr.l.google.com", "TXT", "ns1.google.com")
+    resolver = _dig_retry(host, [], "o-o.myaddr.l.google.com", "TXT", "ns1.google.com")
     resolver_ip = next((x.strip('"') for x in resolver if "edns" not in x), "")
     problems = []
     if who_ip != data["ip"]:
@@ -1049,6 +1056,57 @@ def check_desktop_updater(h, p, a):
             return FAIL, summary + "；ShipIt 仍在后台挂起待装包，请按用户意愿处理"
         return PASS, summary
     return INFO, summary
+
+
+PRIVACY_ENV_REQUIRED = (
+    ("DISABLE_TELEMETRY", "1"),
+    ("DISABLE_ERROR_REPORTING", "1"),
+    ("DISABLE_FEEDBACK_COMMAND", "1"),
+    ("DISABLE_BUG_COMMAND", "1"),
+    ("CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY", "1"),
+    ("CLAUDE_CODE_ENABLE_TELEMETRY", "0"),
+    ("CLAUDE_CODE_ENABLE_FEEDBACK_SURVEY_FOR_OTEL", "0"),
+    ("OTEL_METRICS_EXPORTER", "none"),
+    ("OTEL_LOGS_EXPORTER", "none"),
+    ("OTEL_TRACES_EXPORTER", "none"),
+    ("DO_NOT_TRACK", "1"),
+    ("CLAUDE_CODE_DISABLE_VITALS_EMITTER", "1"),
+    ("CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION", "1"),
+)
+
+
+def check_claude_privacy(h, p, a):
+    sep = "\\" if h.platform == "win32" else "/"
+    path = str(h.home()) + sep + ".claude" + sep + "settings.json"
+    if h.lstat(path) is None:
+        return FAIL, "%s 不存在（尚未写入 14 项官方隐私静音开关）" % path
+    if h.is_link(path):
+        return FAIL, "%s 是符号链接（拒绝信任）" % path
+    try:
+        data = json.loads(h.read_text(path))
+    except ValueError as exc:
+        return FAIL, "%s JSON 解析失败: %s" % (path, exc)
+    if not isinstance(data, dict):
+        return FAIL, "%s 顶层不是 JSON 对象" % path
+    env = data.get("env") if isinstance(data.get("env"), dict) else {}
+    missing, wrong = [], []
+    for key, expected in PRIVACY_ENV_REQUIRED:
+        if key not in env:
+            missing.append(key)
+        elif str(env[key]) != expected:
+            wrong.append("%s=%r（应为 %r）" % (key, env[key], expected))
+    if "skipWebFetchPreflight" not in data:
+        missing.append("skipWebFetchPreflight")
+    elif data["skipWebFetchPreflight"] is not True:
+        wrong.append("skipWebFetchPreflight=%r（应为 true）" % data["skipWebFetchPreflight"])
+    problems = []
+    if missing:
+        problems.append("缺 %d 项: %s" % (len(missing), ", ".join(missing[:6]) + ("..." if len(missing) > 6 else "")))
+    if wrong:
+        problems.append("值不符: %s" % ", ".join(wrong[:4]))
+    if problems:
+        return FAIL, "%s：%s" % (path, "；".join(problems))
+    return PASS, "%s：14 项官方隐私静音开关已配齐（含 skipWebFetchPreflight=true）" % path
 
 
 CHECKS = {name[len("check_"):]: fn for name, fn in globals().items() if name.startswith("check_")}

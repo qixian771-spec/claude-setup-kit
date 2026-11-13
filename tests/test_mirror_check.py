@@ -98,6 +98,10 @@ IPV6_GUARD_PLIST = b"""<?xml version="1.0" encoding="UTF-8"?>
 </dict></plist>
 """
 CHROME_POLICY = plistlib.dumps({"DnsOverHttpsMode": "off", "WebRtcIPHandling": "disable_non_proxied_udp"})
+CLAUDE_PRIVACY_SETTINGS = json.dumps({
+    "env": dict(mc.PRIVACY_ENV_REQUIRED),
+    "skipWebFetchPreflight": True,
+})
 
 
 class Stat:
@@ -159,6 +163,7 @@ def baseline_stats():
         "/usr/local/libexec/ipv6-guard.sh": Stat(0, 0o100755),
         "/usr": Stat(0, 0o40755), "/usr/local": Stat(0, 0o40755), "/usr/local/libexec": Stat(0, 0o40755),
         HOME + "/.local/bin/claude-wall": Stat(501, 0o100755),
+        HOME + "/.claude/settings.json": Stat(501, 0o100644),
     }
     for label in ("local.claude-direct-wall", "local.claude-net-wall", "local.leak-guard",
                   "local.claude-address-update", "local.net-guard-watch", "local.ipv6-guard"):
@@ -199,7 +204,8 @@ class FakeHost:
         self.cmds, self.stats, self.apis = baseline_cmds(), baseline_stats(), baseline_apis()
         self.files = {"/etc/pf.conf": PF_CONF,
                       HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml": RUNTIME_CONFIG,
-                      HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml": BASE_CONFIG}
+                      HOME + "/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml": BASE_CONFIG,
+                      HOME + "/.claude/settings.json": CLAUDE_PRIVACY_SETTINGS}
         self.bytes = {"/Library/Managed Preferences/com.google.Chrome.plist": CHROME_POLICY,
                       "/Library/LaunchDaemons/local.ipv6-guard.plist": IPV6_GUARD_PLIST}
         self.links = set()

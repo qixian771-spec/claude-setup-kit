@@ -799,6 +799,18 @@
         "path": "%LOCALAPPDATA%/claude-setup-kit/claude-wall.ps1"
       },
       "next": "双击 installers\\win\\安装体检工具.cmd（不需要管理员）。"
+    },
+    {
+      "id": "claude.privacy",
+      "layer": "隐私",
+      "title": "Claude 官方隐私静音开关已补齐（14 项，含读网页前免报备网址）",
+      "check": "claude_privacy",
+      "platforms": [
+        "darwin",
+        "win32"
+      ],
+      "next": "AI 直接运行 python3 scripts/auto_init.py --privacy-only（自动备份并补齐 ~/.claude/settings.json 缺失的 14 项官方静音开关，已有设置不覆盖，无需密码）。",
+      "next_win": "AI 直接运行 py -3 scripts/auto_init.py --privacy-only（自动备份并补齐 ~/.claude/settings.json 缺失的 14 项官方静音开关，已有设置不覆盖，无需管理员）。"
     }
   ],
   "steps": [
@@ -840,8 +852,8 @@
       ],
       "installer": "installers/安装Claude直连墙.command",
       "log": "direct-wall",
-      "user_action": "双击 installers/安装Claude直连墙.command，终端里输入开机密码，看到“安装结束”回来",
-      "say": "第一道墙：Claude 的真实地址只允许从代理出去。双击“安装Claude直连墙.command”，输密码时屏幕不显示字符，输完回车。"
+      "user_action": "推荐直接双击 installers/一键安装全部.command（输 1 次密码一次装完 S2–S8 + 补齐隐私开关，日志 installers/logs/install-all-*.log）；想单步装就双击 installers/安装Claude直连墙.command",
+      "say": "接下来装系统防护：推荐直接双击“installers/一键安装全部.command”，输一次开机密码就能把三道防泄露墙、更新器、自检守护、关 IPv6 和体检工具一口气全装好（屏幕输密码不显示字符，输完回车，看到安装结束回来）。"
     },
     {
       "id": "S3",
@@ -959,9 +971,10 @@
     },
     {
       "id": "S10",
-      "title": "系统时区（语言与禁自动更新可选）",
+      "title": "系统时区与官方隐私静音开关（语言与禁自动更新可选）",
       "components": [
         "sys.timezone",
+        "claude.privacy",
         "desktop.updater"
       ],
       "info": [
@@ -969,9 +982,9 @@
       ],
       "requires": [],
       "installer": null,
-      "ai_action": "若 desktop.updater 发现待装更新包或用户关心更新安全，先调用 claude-client-full-reset/scripts/desktop_update_audit.py 检测更新包并结合本机情况向用户说明改动内容与安全判断，再询问是否开启可选的禁止自动更新策略（默认不锁）",
+      "ai_action": "先跑 python3 scripts/auto_init.py --privacy-only 自动补齐 claude.privacy；若 desktop.updater 发现待装更新包或用户关心更新安全，再调用 claude-client-full-reset/scripts/desktop_update_audit.py 检测更新包并结合本机情况向用户说明改动内容与安全判断，按推荐二选一询问是否开启可选的禁止自动更新策略（默认不锁）",
       "user_action": "系统设置 → 通用 → 日期与时间 → 关自动设置 → 选节点所在时区（语言与 Claude禁自动更新.mobileconfig 均为可选项，按本人意愿决定）",
-      "say": "把系统时区改成节点所在的时区：系统设置 → 通用 → 日期与时间。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项（如果有下载好的更新包，我会先帮你拆检说明包里改了什么并结合你本机情况给出判断，再由你定要不要锁更新）。"
+      "say": "官方后台隐私静音开关我已帮你自动补齐；请把系统时区改成节点所在的时区：系统设置 → 通用 → 日期与时间。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项。"
     },
     {
       "id": "S11",
@@ -1128,9 +1141,10 @@
     },
     {
       "id": "S7",
-      "title": "系统时区（语言与禁自动更新可选）",
+      "title": "系统时区与官方隐私静音开关（语言与禁自动更新可选）",
       "components": [
         "sys.timezone",
+        "claude.privacy",
         "desktop.updater"
       ],
       "info": [
@@ -1139,8 +1153,9 @@
       "requires": [],
       "installer": "installers\\win\\设置时区.cmd",
       "log": "设置时区",
+      "ai_action": "先跑 py -3 scripts/auto_init.py --privacy-only 自动补齐 claude.privacy；若有待装更新包，再用 desktop_update_audit.py 拆检向用户汇报后二选一询问是否开启可选禁自动更新",
       "user_action": "双击 installers\\win\\设置时区.cmd（UAC），或 设置 → 时间和语言 → 日期和时间 手动选（语言与 Claude禁自动更新.reg 均为可选项）",
-      "say": "把系统时区改成节点所在的时区：双击“设置时区.cmd”。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项（如果有待装更新包，我会先帮你拆检说明更新包内容并结合本机情况给出判断，再由你定要不要导入 Claude禁自动更新.reg）。"
+      "say": "官方隐私静音开关我已自动补齐；把系统时区改成节点所在的时区：双击“设置时区.cmd”。语言顺序和『禁止 Claude Desktop 自动更新』都是可选项。"
     },
     {
       "id": "S8",

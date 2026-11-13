@@ -1,75 +1,61 @@
-# START：给 AI 的总手册（用户只发这一个链接）
+# START：给 AI 的傻瓜防漏总手册（用户只发这一个链接）
 
-你（AI）刚收到的是 <https://github.com/qixian771-spec/claude-setup-kit>。用户要的是：把他们的电脑配成"参考机"那样用 Claude——可能包括建节点、配 Mac 环境、清理重置。本页告诉你先问什么、走哪条路、每条路的产出和交回点。**每一步只认机器输出（对账表、日志、退出码），不认你自己的判断。**
+你（AI）刚收到的是 <https://github.com/qixian771-spec/claude-setup-kit>。用户要的是把电脑配成"参考机"那样稳妥用 Claude。**禁止嫌麻烦半路总结收尾，禁止漏掉隐私开关、浏览器策略或时区，禁止遇到小提示就罢工停下！**
 
-## 0. 先做三件事
+## ⚡ 防偷懒 4 步极速流水线（任何 AI 照这 4 步做到底，绝不会漏！）
 
-**先确认能打开 GitHub**：在国内没有任何代理时 `github.com` 多半连不上（连接被重置或超时），`git clone` 会在第一步就卡住。用户已经有 Clash/节点的，让他们先把 Clash 的**系统代理**打开再克隆（这不违反"出口不切换"——这里只是开关系统代理，不动节点）。完全没有代理、也没有节点的新机器（A 路线从零）拿不到仓库，让用户用能上网的手机或另一台电脑在 GitHub 页面点 **Code → Download ZIP**，把 zip 拷过来解压，之后所有命令一样跑（`mirror_check`、`next_step` 不依赖 git）；A、C 路线要用的另外两个仓库同样用 Download ZIP。ZIP 解压出来的 `.command` 带隔离属性，第一次双击会被 macOS 拦下：让用户到 系统设置 → 隐私与安全性 底部点"仍要打开"，或由用户自己运行 `xattr -dr com.apple.quarantine <解压目录>`。不要自己找第三方镜像站替用户下载。
+> Windows 把下面的 `python3` 换成 `py -3`（路径一律用正斜杠 `/`）。如果国内没开代理连不上 GitHub，先让用户把现有 Clash 的**系统代理**打开再 `git clone`；完全没代理的新机器让用户在手机/别的电脑点 GitHub 页面 **Code → Download ZIP** 拷过来解压（Mac 首次双击若被拦，到 系统设置 → 隐私与安全性 点"仍要打开"）。
 
-```sh
-git clone https://github.com/qixian771-spec/claude-setup-kit
-cd claude-setup-kit
-python3 scripts/mirror_check.py
-```
+1. **第 1 步：自动认路 + 自动关后台遥测（你直接跑，不用先追问一堆问题！）**
+   ```sh
+   git clone https://github.com/qixian771-spec/claude-setup-kit
+   cd claude-setup-kit
+   python3 scripts/auto_init.py
+   python3 scripts/mirror_check.py
+   ```
+   - `auto_init.py` 会**自动探测**当前 Clash 正在用的出口节点、本机网卡与已有守护写入 `mirror.params.json`，并**自动备份且补齐 `~/.claude/settings.json` 的 14 项官方隐私静音开关**（已有设置不覆盖，无需密码）。
+   - 看完结果后，只问用户还没明确的事：**走哪条路线**（**A 建节点** / **B 配这台电脑** / **C 彻底清理换号** / **D 全套从零**）、是否同意装系统防泄露规则与关 IPv6（Windows 顺便确认时区，默认 `Pacific Standard Time`）。
+   - 若 Clash 还没导入本套件配置（S1 未全绿）：把用户现有的 **1 个节点参数**（VLESS / Trojan / Shadowsocks `ss` / SOCKS5 等任意协议都支持！只有主出口被 Google 误判成中国时才需第 2 节点 `NODE2`）写成私有目录 JSON，跑 `python3 scripts/render.py --component clash --nodes <节点.json>`，让用户在 Clash Verge「新建 → 本地」导入、开启服务模式与 TUN 模式、选定主出口节点，再跑一次 `python3 scripts/auto_init.py --exit-node <主出口节点名>`。
 
-Windows 上把 `python3` 换成 `py -3`，脚本路径用正斜杠（`py -3 scripts/mirror_check.py`；PowerShell、cmd、Git Bash 都认，反斜杠在 Git Bash 里会被吞掉）。**macOS 前置**：`xcode-select -p` 要有输出（没有就让用户运行 `xcode-select --install` 并点安装，`git`/`python3` 和所有 `.command` 都靠它）；Clash Verge（macOS 版）装好后 设置 → 服务模式 → 安装。Windows 需要先装两样：**Git for Windows**（<https://git-scm.com/download/win>，默认选项即可）和 **Python 3.9+**（<https://www.python.org/downloads/windows/>，安装时勾上 *py launcher*）；装好后在 PowerShell 里 `git --version` 和 `py -3 --version` 都有输出才继续。还要装 **Clash Verge（Windows 版）**并在 设置 里**安装服务模式**（TUN 的硬前提，弹 UAC），装法见 [Windows 手册](references/runbook-windows.md) S1 第 1 步。这三样都让用户自己点安装包。
+2. **第 2 步：双击 1 次《一键安装全部》（禁止拆成十几轮折腾用户！）**
+   - **macOS**：让用户双击一次 **`installers/一键安装全部.command`**（只输 1 次开机密码，自动装完 PF 三道墙 S2–S4 + 地址更新器 S5 + 自检守护 S6 + IPv6 守护 S7 + 体检工具 S8；已装过的自动跳过，不怕重跑！），再双击一次 **`installers/Chrome策略.mobileconfig`**（到 系统设置 → 通用 → 设备管理 点安装后完全退出重开 Chrome）并把系统时区调到节点所在国。
+   - **Windows**：确认 Clash Verge 已安装**服务模式**且 TUN 已开后，让用户双击一次 **`installers\win\一键安装全部.cmd`**（点 1 次 UAC，自动完成：识别本机全部物理网卡 + **关闭全部物理网卡 IPv6 并开启每分钟防复开守护** + 防火墙三套规则 + 自检守护 + Chrome/Edge 防泄露策略 + 体检脚本 + 时区 + 14 项官方隐私静音开关！）。装完**保持安装状态**（只有用户明确说要打游戏撤回防护时才用 `一键撤回全部.cmd`）。
 
-`mirror_check` 的"只读"是指**不改任何东西**：它会向 `www.cloudflare.com`（出口 IP 与国家）、`1.1.1.1` / `ns1.google.com`（DNS 上游）发探测，还会在本机解析 `www.cloudflare.com`（`dig @127.0.0.1` 与系统解析器，证明 DNS 走了 Clash；这两条 `--no-network` 也不跳过），不碰任何 Anthropic 地址；查 PF 规则和描述文件时用 `sudo -n`，没有免密 sudo 的机器那几项显示 ❓——**AI 永远不自己 sudo**：`next_step` 会改为让用户双击 `installers/提权对账.command`（只读、要一次密码、什么都不装），然后 AI 运行 `python3 scripts/next_step.py --input installers/logs/mirror-sudo-latest.json` 接着走；❓ 不是 ❌，不要去重装。`tool.claude_wall` 会跑 `claude-wall status`，里面的 `dig api.anthropic.com` 只是问本机 Clash 拿 fake-ip，不连接 Anthropic。网络受限时加 `--no-network`，两项出口检查会变 ❓。
+3. **第 3 步：处理其余待办与可选询问项（用 `next_step.py` 逐项扫尾，别自己猜）**
+   - 运行 `python3 scripts/next_step.py`（退出码 `3` 是正常提示下一步，**不是报错**！退出码 `0` 表示全部通过）。
+   - 如果遇到 `❓ 需要 sudo`（例如用户跳过了更新器 S5）：不要罢工，也不要自己敲 `sudo`，让用户双击一次只读的 `installers/提权对账.command`，再跑 `python3 scripts/next_step.py --input installers/logs/mirror-sudo-latest.json` 即可继续！
+   - **桌面版自动更新（可选项，默认不锁）**：若 `desktop.updater` 发现本机已有待装更新包，先克隆跑一次 `claude-client-full-reset/scripts/desktop_update_audit.py` 用大白话告诉用户包里改了什么与安全判断，再按推荐二选一简单问用户：`1. 不关闭自动更新（推荐）` / `2. 关闭自动更新`（一句话说明原因：保持正常更新不易因版本过旧受限，只有赶工怕后台自动重启时才选关闭）。用户不关就直接往下走！
+   - 若用户明确不做某一步（如不装防泄露墙 S4），把 `"skip_steps": ["S4"]` 写进 `mirror.params.json`，脚本会自动跳过并记入交付，绝不会卡死。
 
-问到出口节点名后，立刻把它写进仓库根目录的 `mirror.params.json`（git 忽略；机器上**已经有** IPv6 守护的才要写 `"ipv6_guard_label"`：先 `ls /Library/LaunchDaemons | grep -i ipv6`，有就把那个文件名去掉 `.plist` 填进去——参考机是 `com.niuniu.ipv6-guard`；新机器不写，用默认 `local.ipv6-guard`；`ipv6.script` 直接读这个 label 的 plist，检查它实际执行的程序是否 root 持有、他人不可写、日志不在用户目录（root 守护不能执行用户可改的文件）；旧守护的脚本在用户目录的会 ❌ 并指向 `installers/迁移IPv6守护.command`（用户双击，label 不变、脚本换到 `/usr/local/libexec`）。有别的守护却不写这两项，`daemon.ipv6`/`ipv6.script` 会 ❌，而 `next_step` 的 S7 会先让 AI `ls /Library/LaunchDaemons | grep -i ipv6`——查到了就只改参数，**不让用户装**（装了会多一份守护）；卸载器只删 plist 指向本套件脚本的守护，不符就 EXIT=73 拒卸）：
+4. **第 4 步：交卷死闸门（没打出 `FINISH_GATE=PASSED` 绝对不准停工交差！）**
+   ```sh
+   python3 scripts/finish_gate.py
+   ```
+   - 只要它输出 `🚫 交卷被拒（FINISH_GATE=BLOCKED）`，说明**你漏项了**——必须照它列出的待办立刻补完再跑，**严禁向用户说"核心已配好，其余可选"**！
+   - 只有它输出 `🎉 通关核验通过（FINISH_GATE=PASSED  核验码=...）`（`❌=0` 且 `❓=0`）后，把核验单和 `python3 scripts/mirror_check.py` 全量表贴给用户，最后按 [ippure 验收](references/ippure-acceptance.md) 请用户在浏览器打开 `https://ippure.com/claude.html` 和 `assets/webrtc-test.html` 截图确认。
 
-```json
-{"exit_node": "<出口节点名>"}
-```
+---
 
-没有这个文件时 `mirror_check` 和 `next_step` 都会在第一行提醒你——那时的 ✅/❌ 是对着参考机的节点名算的，不作数。Windows 机器还要写网卡名：`{"exit_node": "<出口节点名>", "network_services": ["以太网"]}`（名字照『网络连接』里显示的，中文系统通常是 `以太网` / `WLAN`）。Mac 默认按 `Wi-Fi` 对账，插网线的 Mac 要 AI 先 `route -n get default`（看 interface）再 `networksetup -listnetworkserviceorder` 找到对应服务名（如 `USB 10/100/1000 LAN`、`Thunderbolt Ethernet`）写进 `network_services`。用户不做的步骤写 `"skip_steps": ["S4"]`，`next_step` 会把它和依赖它的步骤标成"未授权跳过"继续往下走，并在最后列出来让你写进交付。
-
-退出码的意思：`mirror_check` 0 = 全 ✅，1 = 有 ❌，2 = 有 ❓；`next_step` **3 = 正常，打印了现在要做的那一步**，0 = 全部步骤通过去做 ippure，2 = 跑不了（manifest 不一致或 mirror_check 崩了）。看到 3 不是失败。
-
-然后问用户一句话（已经说过的不要再问）："你要的是哪种：**A 建节点**（还没有可用节点）、**B 配这台 Mac**（已有节点）、**C 清理重置 / 换账号 / 补遥测开关 / 拆检更新包**、**D 全套从零**？" 以及出口节点名、是否同意装防火墙规则与描述文件、是否同意关 IPv6、**是否要开启可选的『禁止 Claude Desktop 自动更新』策略**（可选项，**必须按推荐项二选一简单询问用户，默认不锁**：`1. 不关闭自动更新（推荐）` / `2. 关闭自动更新` —— **原因**：保持正常更新不易因版本太旧受限，只有赶工怕后台闲置自动重启时才选关闭；若 `desktop.updater` 对账发现本机已有待装更新包或用户关心此次更新是否安全，AI 必须先克隆并运行 `claude-client-full-reset/scripts/desktop_update_audit.py`，用大白话向用户说清楚**① 此次更新包具体改了什么**以及**② 结合这台机器当前状态与单/双通道分流的综合判断**，再按上述二选一请用户决定）；**Windows 还要问时区**：一键安装会把系统时区改成 `mirror.params.json` 里 `timezone_win` 的值（默认 `Pacific Standard Time`，美国太平洋），用户要别的就先写进去，不想改就不用一键、分步跳过 S7。
-
-仓库根目录的 `AGENTS.md` 是账号级的通用交付标准，它自己写明"不授予额外写入/发布权限、遵守本仓库具体规则"——所以下面的硬规则优先，尤其是"要密码的安装由用户双击"，AI 不自己 sudo。
-
-硬规则（任何路线都适用）：出口节点固定不切、不退出 Clash、不关 TUN（唯一例外：S1 的 `clash.base_config` ❌ 时，先问用户、由用户自己退出 Clash Verge 改基础配置再打开；用户不同意就停下报告）；不向 Anthropic / Claude 地址做直连试探（套件自己也有闸门：`mirror_check` 遇到这种命令会直接拒绝并以 2 退出，`tools/check.py` 会把写了这种探测的代码挡在提交之外；唯一允许的是向本机 Clash 解析器 `@127.0.0.1` 查 fake-ip）；所有写系统的动作由用户双击或在界面里点，你只渲染、读日志、对账；没有兜底——安装器拒绝就停下报告。
-
-## 1. 路线
+## 1. 四条路线速查
 
 | 路线 | 进入条件 | 做什么 | 产出 | 交回总入口时带什么 |
 |---|---|---|---|---|
-| **A 建节点** | 用户没有可用节点，有 VPS 或准备买 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到本仓库旁边，读它的 `SKILL.md` → `references/runbook.md`，按它的任务卡部署 3x-ui / VLESS-REALITY 并验收 | 节点参数（服务器、端口、UUID、SNI、REALITY 公钥与 short-id） | 写成 JSON：默认字段 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`（也支持用 `NODE1_TYPE` 或 `NODE1_PROXY` 填任意 Clash 协议如 Trojan / Shadowsocks `ss` / SOCKS5 / VMess / Hysteria2；**只有 `NODE1` 必填**，`NODE2`/`NODE3`/`NODE4` 均可选：`NODE2` 只在主出口被 Google 误判成中国时填任意协议的第 2 节点给 Google 分流；可选 CDN 备用入口 `NODE4` 见 [references/cdn-backup.md](references/cdn-backup.md)；不给可选节点时它们的代理、分组和规则会自动整段去掉）；文件放私有目录，**不进任何仓库** |
-| **B 配 Mac** | 有节点参数；macOS | 本仓库 [执行手册](references/runbook.md) S1–S12；每做完一步跑 `python3 scripts/next_step.py`，它会说下一步做什么 | `mirror_check` 全 ✅ + ippure 四项 | 全量对账表、日志路径、截图 |
-| **B′ 配 Windows 10/11** | 有节点参数；Windows | 本仓库 [Windows 手册](references/runbook-windows.md) S1–S9；命令用 `py -3 scripts/mirror_check.py`、`py -3 scripts/next_step.py`；S1 之后双击 `installers\win\一键安装全部.cmd`（一次 UAC 装完 S2–S7）。装好后**保持安装状态**；只有用户明确说要打游戏或要撤掉防护时，才让用户双击 `一键撤回全部.cmd`（撤回后 `wf.*` ❌ 是预期） | 同 B | 同 B |
-| **C 清理重置** | 换账号、封号后重来、要关遥测/补分流、提示重启更新想先验包 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读它的 `SKILL.md` → `references/agent-runbook.md`；用它的 `identifiers.py` 在清理前后快照证明 ID 换了；`telemetry_routing.py` 补遥测开关与分流规则；`desktop_update_audit.py` 只读拆检本地暂存更新包并结合本机状态给出判断 | 清理验收 + 标识对比表 / 更新包审计结论 | `identifiers.py --compare` 退出 0 的输出（或 `desktop_update_audit.py` 报告） |
-| **D 全套从零** | 新机器或要"和参考机一模一样" | 顺序：C（可选，只在有旧数据时）→ A（没有节点时）→ B → ippure | 同 B | 同 B |
+| **A 建节点** | 用户完全没有可用节点，准备用 VPS 自建 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到旁边，按它的 `SKILL.md` → `references/runbook.md` 部署 3x-ui / VLESS-REALITY 并验收 | 节点参数 | 写成私有目录 JSON（**不进任何仓库**）：默认字段 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`；其它现成节点也可用 `NODE1_TYPE`（`trojan`/`ss`/`socks5`/`vmess`/`hysteria2`）或 `NODE1_PROXY` 原样对象；**仅 `NODE1` 必填**，`NODE2`/`NODE3`/`NODE4` 均可选（[cdn-backup.md](references/cdn-backup.md)） |
+| **B 配 Mac** | 已有节点；macOS（需 `xcode-select -p` 有输出） | S1 导 Clash 配置开 TUN → 双击 `installers/一键安装全部.command` → 双击 `Chrome策略.mobileconfig` + 调时区 → `finish_gate.py` 通关（分步细节见 [执行手册](references/runbook.md)） | `finish_gate.py` `PASSED` + ippure 四项 | 通关核验单、全量对账表、日志路径、截图 |
+| **B′ 配 Windows** | 已有节点；Windows 10/11（需装 Git for Windows、Python 3.9+ 勾 `py launcher`、Clash Verge 服务模式） | S1 导 Clash 配置开服务模式与 TUN → 双击 `installers\win\一键安装全部.cmd` → `py -3 scripts/finish_gate.py` 通关（分步细节见 [Windows 手册](references/runbook-windows.md)） | 同 B | 同 B |
+| **C 清理重置** | 换账号、封号后重来、深度补遥测/分流、拆检待装更新包 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读 `SKILL.md`：`identifiers.py` 清理前后快照对比；`telemetry_routing.py` 补遥测与分流；`desktop_update_audit.py` 只读拆检更新包 | 标识对比表 / 审计报告 | `identifiers.py --compare` 退出 0 输出 |
+| **D 全套从零** | 新机器或旧号彻底重来 | 顺序：C（有旧数据时）→ A（没节点时）→ B/B′ → `finish_gate.py` → ippure | 同 B | 同 B |
 
-路线之间的衔接：A 的产出或用户已有的节点参数喂给 B 的 S1（`render.py --component clash --nodes <JSON>`）：
-1. **节点数量与协议都不锁死（1 个节点就能跑，任意 Clash 协议都支持）**：
-   - 用户如果已有现成节点（不管是 VLESS-REALITY、Trojan、Shadowsocks `ss`、SOCKS5、VMess、Hysteria2，还是旧 Clash 配置文件里的 `proxies` 节点对象），直接用 `NODE1_TYPE`（如 `"trojan"` / `"ss"`）或 `"NODE1_PROXY": {<原样节点对象>}` 渲染即可，**绝不要因为协议不是 VLESS/Trojan 就卡住用户或要求换协议**。
-   - 真正的硬规则只有一条：**Claude 的 `出口选择` 必须固定锁死在同一个主出口节点（`exit_node`），绝不含 `DIRECT`、绝不自动轮换**。
-2. **Google 分流采用『智能按需法』（不强制所有人配第 2 个节点）**：
-   - 参考机之所以单独设 `Google出口`，唯一原因是部分机房 IP 会被 Google 地理库误判成中国/香港（俗称"送中 IP"，会导致 Gemini 报"不支持该地区"）。
-   - **怎么智能判断**：
-     - 如果用户**只有 1 个节点**：只填 `NODE1`（不填 `NODE2`），模板自动按**单出口模式**生成（无 `Google出口` 分组，Google 随主出口走，`clash.google_exit` 对账记 `ℹ️` 正常通过），**不要强迫用户再找第 2 个节点**。
-     - 如果用户手里**有其他现成节点**（例如旧配置里存的 Shadowsocks / Trojan / VLESS 等）：在主出口跑通后，可只读测一下 Google 对主出口的地区判定（如 `curl -sS -m 5 https://www.youtube.com/sw.js_data | grep -oE '"[A-Z]{2}"' | head -n 5`，Windows 用 `curl.exe`）或问用户平时开 Gemini 会不会提示不支持地区。**没被误判成 CN/HK 时直接保持单出口共用即可**；**只有被 Google 误判成 CN/HK（或用户明确想把 Google 分开）时**，才把另一个节点填进 `NODE2`（同样支持 `"NODE2_TYPE": "ss"` 或 `"NODE2_PROXY": {...}` 等任意协议）给 `Google出口` 用，主出口仍固定不动（`storage.googleapis.com`/`fonts.*` 精确规则仍在 Google 后缀之前，继续走主出口）。若用户明确要求强制对账独立 Google 出口，再在 `mirror.params.json` 设 `"google_split_required": true`。
-3. **NODE4 的两条铁规**：它必须是 NODE1 **同一台服务器**的 CDN 入口（出口 IP 相同），才能放进「出口选择」当备用成员；指向别的服务器的 CDN 节点出口不同，**不准**进「出口选择」（Claude 规则会走到它）。它平时不选中，只在直连被墙时由用户手动切换；而且要 mihomo ≥ 1.19.29（`clash.xhttp_core` 会查，Windows 的 Clash Verge 2.4.4 不行）。
-4. C 做完后 B 的 S9（Chrome）与 S1 都要重新对账，因为清理会动浏览器与 Clash 之外的 Claude 数据但不动系统防护。
+### 节点与 Google 智能按需分流说明（别再卡用户协议或第 2 节点！）
+1. **任意协议直接用**：用户现有节点不管是 VLESS、Trojan、Shadowsocks（`ss`）、SOCKS5、VMess、Hysteria2，还是旧 Clash 配置里的节点对象，直接用 `NODE1_TYPE` 或 `NODE1_PROXY` 渲染即可。真正的死规矩只有一条：**Claude 的 `出口选择` 固定锁在同一个主出口节点，绝不含 `DIRECT`、绝不来回切**。
+2. **Google 智能按需分流**：参考机设 `Google出口` 只是为了防部分机房 IP 被 Google 误判成中国（"送中"，导致 Gemini 报不支持地区）。**用户只有 1 个节点或主出口没被误判成 CN/HK 时，只填 `NODE1`（省略 `NODE2`）即可**——Google 与 Claude 安全共用主出口，`clash.google_exit` 记 `ℹ️ 单出口模式` 直接通过！只有主出口送中且有第 2 节点时才填 `NODE2`（同样支持 `ss`/`trojan` 等任意协议）。
+3. **NODE4 备用 CDN 入口**：必须是 `NODE1` **同一台服务器**的 CDN 入口（出口 IP 相同）才能进 `出口选择`，且需 mihomo ≥ 1.19.29。
 
-## 2. 在 B 路线里你每一轮只做这三件事
+---
 
-```sh
-python3 scripts/next_step.py
-```
+## 2. 不可越过的安全底线（由脚本自动守卫）
 
-它会打印：现在做哪一步、哪些组件没过、让用户双击哪个文件、对用户说哪句话、做完跑哪条对账命令。照做，贴对账输出，再跑一次 `next_step.py`。它说"全部步骤通过 → 做 ippure 验收"时，按 [ippure 验收](references/ippure-acceptance.md) 让用户截两张图并记录四项。
-
-用户需要动手的时候，照 [对话模板](references/conversation.md) 说话。
-
-## 3. 交付
-
-- B：`python3 scripts/mirror_check.py` 全量输出（`合计` 行 ❌=0 ❓=0）+ 每步日志 `installers/logs/*.log` 的最后几行 + chrome://policy、WebRTC、ippure 两张截图 + 没做或做不到的项（未授权跳过、Firefox、硬件指纹、共用 CDN 域名）。
-- A、C：各自仓库手册规定的验收证据。
-- 永远不要把节点参数、密钥、私人路径、截图里的真实 IP 写进任何仓库或公开的地方。
-
-## 4. 做不到的事（提前告诉用户）
-
-不改硬件序列号 / MAC / 磁盘 ID；不保证账号不被风控；Windows 侧不做精确 IP 更新器（只做整段墙 + Clash 域名规则）；Firefox 没有策略模板；Claude 走共用 CDN 的域名靠 Clash 规则而不是防火墙。
+- **出口固定不乱切**：配置好后不为了测试去切换出口节点、不退出正在跑会话的 Clash（唯一例外：S1 初配时 `clash.base_config` ❌ 夹带了顶层代理段，征得用户同意后退出改完重开）。
+- **绝不向 Anthropic / Claude 域名发网络探测**：`mirror_check` 与 `tools/check.py` 内置拦截闸门，出口与 DNS 实测只用 Cloudflare / Google 公共端点与本地 `@127.0.0.1` fake-ip 查询。
+- **提权动作由用户双击完成**：AI 永远不自己敲 `sudo`；对用户说话用大白话（见 [对话模板](references/conversation.md)），每次告诉用户"双击哪个文件、做完回来说一声"。
+- **诚实交付边界**：不改硬件序列号/MAC/磁盘 ID；不承诺免封号；Windows 不做精确 IP 更新器（用整段防火墙 + Clash 规则）；Firefox 无策略模板；共用 CDN 域名靠 Clash 规则分流。永远不把真实 IP、节点密钥、私人路径提交进任何仓库。

@@ -1,8 +1,12 @@
 # 执行手册：把一台 Mac 配成参考机
 
-流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 40 个在附录 B 对照表里。
+流程主入口。每一步的格式固定：**进入条件 → 动作 → 读什么 → 对账 → 下一步 / 停止**。对账永远是 `python3 scripts/mirror_check.py --only <id>` 的输出原文；没贴输出的步骤等于没做。组件 id 见 [manifest.json](../manifest.json)，全部 41 个在附录 B 对照表里。
 
-执行主体是 AI；只有标了 👤 的动作要用户亲自做（双击 `.command`、输密码、在 Clash Verge / 系统设置里点按钮、截图）。AI 渲染、读日志、对账、交付。
+执行主体是 AI；只有标了 👤 的动作要用户亲自做（双击 `.command`、输密码、在 Clash Verge / 系统设置里点按钮、截图）。AI 渲染、读日志、对账、交付，最后必须跑 `python3 scripts/finish_gate.py` 拿到 `FINISH_GATE=PASSED` 核验码才能交差。
+
+## 推荐：一键安装 / 一键撤回（防偷懒省事首选）
+
+S1（Clash Verge 开好 TUN）完成后，**S2–S8 不需要拆成 7 轮分别双击**：直接让 👤 双击一次 `installers/一键安装全部.command`（只输 1 次开机密码），它会自动运行 `auto_init.py`（补齐 14 项 Claude 官方隐私静音开关 `claude.privacy`），再按顺序安装三道 PF 墙（S2–S4）、地址更新器（S5）、自检守护（S6）、IPv6 守护（S7，遇到旧版用户目录守护会自动迁移）和 `claude-wall` 体检命令（S8）；已安装过的组件自动跳过，日志写 `installers/logs/install-all-*.log`（看最后 `EXIT=0`）。需要整体撤回时双击 `installers/一键撤回全部.command`。下面的 S2–S8 章节供单步排查或补装某一项时参考。
 
 ## G0 接收任务 → 约束表
 
@@ -118,13 +122,14 @@
 
 ## S10 系统设置
 
-组件：`sys.timezone`（必做）、`desktop.updater`（默认 ℹ️；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（可选，ℹ️）。
+组件：`sys.timezone`（必做）、`claude.privacy`（必做，AI 自动补齐 14 项官方隐私静音开关）、`desktop.updater`（默认 ℹ️；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（可选，ℹ️）。
 动作：
+0. AI 先运行 `python3 scripts/auto_init.py --privacy-only`（自动备份 `~/.claude/settings.json` 并补齐缺失的 14 项官方隐私静音开关，含 `skipWebFetchPreflight: true`，已有设置不覆盖，无需密码）。
 1. 👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（东京、新加坡、首尔都可以；只有中国大陆、香港、澳门被判 ❌）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
 2. **更新包审计与可选禁自动更新（必须先查清再询问用户，不默认锁）**：
    - 若 `desktop.updater` 显示已有暂存更新包（`ShipItState.plist` / `ShipIt` 挂起），AI 必须先只读运行 `claude-client-full-reset/scripts/desktop_update_audit.py`（不关 Claude、不改应用目录），向用户汇报两件事：**① 此次更新包具体内容**（版本与 Electron 跨度、原生模块变化、新增域名/接口/遥测事件、是否发现硬件序列号/UUID/MAC 采集或 WebRTC 直连暗桩、Persona 实名页是否纯属云端网页下发，以及个人版 `1p` 遥测照常发往 `api.anthropic.com/api/event_logging/batch` 的实情）；**② 结合这台机器现状的判断**（ShipIt 是否挂起退出即装、当前 Clash 分流是否已覆盖 `withpersona.com` 等核验/遥测域名、受管策略现状）。
    - 汇报后询问用户是否开启**可选**的禁止自动更新策略：保留默认则不动（补齐分流后可正常升级）；只有用户明确选择锁更新时，才在 `mirror.params.json` 设 `"desktop_block_updates_required": true`，并让 👤 双击 `installers/Claude禁自动更新.mobileconfig` → 系统设置 → 通用 → 设备管理 → 安装（注意：个人版 `1p` 在 `claude_desktop_config.json` 或 `defaults write` 里写 `disableAutoUpdates` 都不生效，只有 MDM 受管描述文件生效；若此前 ShipIt 已挂起旧暂存包，由用户在了解后果后决定是否卸掉当前本轮 ShipIt 任务）。
-对账：`--only sys.timezone,desktop.updater,sys.language`。
+对账：`--only sys.timezone,claude.privacy,desktop.updater,sys.language`。
 
 ## S11 实测
 
@@ -202,6 +207,6 @@
 | `net.ipv6_off` `daemon.ipv6` `ipv6.script` | S7 | `安装IPv6守护.command` |
 | `tool.claude_wall` | S8 | `安装体检工具.command` |
 | `chrome.policy` `browser.webrtc` | S9 | `Chrome策略.mobileconfig` + `assets/webrtc-test.html` |
-| `sys.timezone` `desktop.updater` `sys.language` | S10 | 系统设置（用户）+ 可选 `Claude禁自动更新.mobileconfig` |
+| `sys.timezone` `claude.privacy` `desktop.updater` `sys.language` | S10 | `auto_init.py --privacy-only` + 系统设置（用户）+ 可选 `Claude禁自动更新.mobileconfig` |
 | `net.exit_ip` `dns.upstream` | S11 | `mirror_check --only net.exit_ip,dns.upstream` + ippure |
-| —（全部步骤） | S12 | `mirror_check` 全量 ❌=0 ❓=0 + ippure 两张截图 |
+| —（全部步骤） | S12 | `finish_gate.py`（`FINISH_GATE=PASSED`）+ `mirror_check` 全量 ❌=0 ❓=0 + ippure 两张截图 |

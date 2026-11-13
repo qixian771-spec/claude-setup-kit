@@ -29,9 +29,14 @@ Invoke-Logged $Log {
         Start-ScheduledTask -TaskName "claude-setup-kit $t"
     }
     if ($wanted -contains 'ipv6-guard') {
-        Start-Sleep -Seconds 5
+        $v6Targets = @($P['WIFI_IFACE']) + @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne $P['TUN'] -and $_.HardwareInterface -eq $true } | ForEach-Object { $_.Name }) | Select-Object -Unique
+        foreach ($nic in $v6Targets) {
+            $b = Get-NetAdapterBinding -Name $nic -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+            if ($b -and $b.Enabled) { Disable-NetAdapterBinding -Name $nic -ComponentID ms_tcpip6 -Confirm:$false }
+        }
+        Start-Sleep -Seconds 3
         if ((Get-NetAdapterBinding -Name $P['WIFI_IFACE'] -ComponentID ms_tcpip6).Enabled) { throw "IPv6 绑定没有被关掉（看 $Root\ipv6-guard.log）" }
-        Write-Output "[OK] $($P['WIFI_IFACE']) 的 IPv6 已解绑，计划任务 claude-setup-kit ipv6-guard 每分钟复查。"
+        Write-Output "[OK] 物理网卡（$($v6Targets -join ', ')）的 IPv6 已关闭解绑，计划任务 claude-setup-kit ipv6-guard 每分钟复查防复开。"
     }
     if ($wanted -contains 'watch') {
         Start-Sleep -Seconds 8

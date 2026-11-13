@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import mirror_check as mc  # noqa: E402
 import winchecks  # noqa: E402
-from test_mirror_check import FakeHost, MANIFEST, Stat, GROUP_PATH  # noqa: E402
+from test_mirror_check import FakeHost, MANIFEST, Stat, GROUP_PATH, CLAUDE_PRIVACY_SETTINGS  # noqa: E402
 
 HOME = "C:\\Users\\tester"
 
@@ -44,10 +44,12 @@ class WinHost(FakeHost):
             "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe": Stat(0, 0o100644),
             "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe": Stat(0, 0o100644),
             HOME + "\\AppData\\Local\\claude-setup-kit\\claude-wall.ps1": Stat(0, 0o100644),
+            HOME + "\\.claude\\settings.json": Stat(0, 0o100644),
         }
         runtime = HOME + "\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\clash-verge.yaml"
         self.files = {runtime: list(self.files.values())[1], "C:\\ProgramData\\claude-setup-kit\\watch\\last": "2026-10-22T22:36:23Z\tOK\t全部正常\n",
-                      HOME + "\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\config.yaml": "mixed-port: 7890\nexternal-controller-pipe: x\n"}
+                      HOME + "\\AppData\\Roaming\\io.github.clash-verge-rev.clash-verge-rev\\config.yaml": "mixed-port: 7890\nexternal-controller-pipe: x\n",
+                      HOME + "\\.claude\\settings.json": CLAUDE_PRIVACY_SETTINGS}
         self.apis["/configs"]["tun"]["device"] = "Meta"
 
     # Paths built on macOS use "/", the fixture keys use "\\": compare them normalised.
@@ -91,7 +93,7 @@ class WindowsBaselineTests(unittest.TestCase):
         self.assertEqual(m["params"]["tun_device"], "Meta")
         self.assertEqual(m["params"]["clash_api"], "pipe://verge-mihomo")
         self.assertEqual(m["platform"], "win32")
-        self.assertEqual(len(m["components"]), 29)
+        self.assertEqual(len(m["components"]), 30)
 
     def test_reference_windows_passes_everything(self):
         code, items, data = run_json(WinHost())
