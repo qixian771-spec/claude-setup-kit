@@ -238,7 +238,9 @@ def check_timezone(host, p, a):
     rc, out, _ = host.run(["tzutil", "/g"])
     zone = out.strip()
     if zone in p["timezone_forbid_win"]:
-        return FAIL, "时区 %s" % zone
+        if p.get("timezone_required"):
+            return FAIL, "时区 %s" % zone
+        return INFO, "时区 %s（ippure 时区项 +30 分；可选项，国行/主力机保留北京时间也算通过）" % zone
     return PASS, "时区 %s" % zone
 
 

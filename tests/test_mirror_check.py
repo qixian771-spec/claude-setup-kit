@@ -746,16 +746,20 @@ class SystemTests(unittest.TestCase):
         host = FakeHost()
         host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Shanghai\n", "")
         _, items, _ = run_json(host, "--only", "sys.timezone")
+        self.assertEqual(items["sys.timezone"]["status"], mc.INFO)
+        _, items, _ = run_json(host, "--only", "sys.timezone", "--param", "timezone_required=true")
         self.assertEqual(items["sys.timezone"]["status"], mc.FAIL)
 
     def test_timezone_of_a_non_chinese_asian_exit_is_fine(self):
-        # Tokyo/Singapore/Seoul nodes are legitimate exits; only mainland China / Hong Kong / Macau are rejected.
+        # Tokyo/Singapore/Seoul nodes pass; domestic zones are optional (INFO) unless timezone_required=true.
         host = FakeHost()
         host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Tokyo\n", "")
         _, items, _ = run_json(host, "--only", "sys.timezone")
         self.assertEqual(items["sys.timezone"]["status"], mc.PASS)
         host.cmds[("readlink", "/etc/localtime")] = (0, "/var/db/timezone/zoneinfo/Asia/Hong_Kong\n", "")
         _, items, _ = run_json(host, "--only", "sys.timezone")
+        self.assertEqual(items["sys.timezone"]["status"], mc.INFO)
+        _, items, _ = run_json(host, "--only", "sys.timezone", "--param", "timezone_required=true")
         self.assertEqual(items["sys.timezone"]["status"], mc.FAIL)
 
     def test_chrome_in_user_applications_is_checked_not_skipped(self):

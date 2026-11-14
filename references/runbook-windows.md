@@ -18,7 +18,7 @@
 
 ## 推荐：一键安装 / 一键撤回（2026-10-23 实机验证）
 
-S2–S7 可以一次做完，但**先问清三件事再让用户双击**：同意装防火墙规则（Clash 一关就断网）、同意解绑 IPv6 和写浏览器策略、时区要改成哪个（`mirror.params.json` 的 `timezone_win`，默认 `Pacific Standard Time`；不想改就先不要用一键，分步跳过 S7）。然后 👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再自动运行 `auto_init.py`（自动识别中文/英文网卡名与出口节点 + 补齐 14 项 Claude 官方隐私静音开关），随后依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具 → 时区；失败即停，**再双击会跳过已装好并验证过的步骤接着装**（例外：防火墙规则只装了一部分时会被"已存在，拒绝覆盖"挡住——让用户先双击 `卸载防火墙规则.cmd` 再一键）。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
+S2–S6 可以一次做完，但**先问清两件事再让用户双击**：同意装防火墙规则（Clash 一关就断网）、同意解绑 IPv6 和写浏览器策略（系统时区默认保留当前时间不动，仅当用户在 `mirror.params.json` 设 `"timezone_required": true` 时才自动改成 `timezone_win`）。然后 👤 双击 `installers\win\一键安装全部.cmd`（一次 UAC）。它先把会改动的设置（防火墙配置文件、时区、IPv6 绑定、浏览器策略键）记到 `C:\ProgramData\claude-setup-kit\before.json`，再自动运行 `auto_init.py`（自动识别中文/英文网卡名与出口节点 + 补齐 14 项 Claude 官方隐私静音开关），随后依次装防火墙规则 → 两个计划任务 → Chrome/Edge 策略 → 体检工具（时区默认跳过保留原样，可选单独安装）；失败即停，**再双击会跳过已装好并验证过的步骤接着装**（例外：防火墙规则只装了一部分时会被"已存在，拒绝覆盖"挡住——让用户先双击 `卸载防火墙规则.cmd` 再一键）。日志在 `installers\logs\一键安装全部-*.log`，最后一行 `EXIT=0` 才算装完。
 
 撤回：👤 双击 `installers\win\一键撤回全部.cmd`：删规则、任务、策略值、体检工具，并照 `before.json` 把防火墙配置文件、时区、IPv6 改回去；守护历史与快照移到 `%USERPROFILE%\claude-setup-kit-uninstalled-<时间>`。Clash 的 TUN 由用户自己在 Clash Verge 里关。实机往返 14 项与安装前完全一致。
 
@@ -101,11 +101,11 @@ py -3 scripts/mirror_check.py --no-network
 
 组件：`tool.claude_wall_ps`。👤 双击 `installers\win\安装体检工具.cmd`（无 UAC）。以后查状态在 PowerShell 里跑 `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\claude-setup-kit\claude-wall.ps1" status`（带 `-ExecutionPolicy Bypass` 是因为默认执行策略会拦 .ps1）。日志里会直接跑一次 `status`：装齐 S2–S4 前退出码 6/1 是正常的。对账：`--only tool.claude_wall_ps`。
 
-## S7 系统时区（语言可选）
+## S7 官方隐私静音开关（时区、语言与禁自动更新均为可选）
 
-组件：`sys.timezone`、`claude.privacy`（必做，一键安装或 `py -3 scripts/auto_init.py --privacy-only` 自动补齐 14 项官方隐私静音开关）、`desktop.updater`（默认 ℹ️，可选；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（ℹ️）。
+组件：`claude.privacy`（必做，一键安装或 `py -3 scripts/auto_init.py --privacy-only` 自动补齐 14 项官方隐私静音开关）、`sys.timezone`（**可选**，默认 ℹ️ 保留北京时间；专用机设 `"timezone_required": true` 才判 ✅/❌）、`desktop.updater`（默认 ℹ️，可选；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（ℹ️）。
 0. AI 先运行 `py -3 scripts/auto_init.py --privacy-only`（若刚跑过一键安装已自动执行）。
-1. 👤 双击 `installers\win\设置时区.cmd`（UAC；时区 id 来自 `params_win.timezone_win`，默认 `Pacific Standard Time`，`tzutil /l` 可查）。
+1. **可选（专用机按需，主力机可跳过）**：👤 双击 `installers\win\设置时区.cmd`（UAC；时区 id 来自 `params_win.timezone_win`，默认 `Pacific Standard Time`，`tzutil /l` 可查）。
 2. **更新包审计与可选禁自动更新（先查清再询问用户，不默认开启）**：若 `desktop.updater` 发现已有待重试/暂存更新包或用户关心更新安全，AI 先只读运行 `claude-client-full-reset/scripts/desktop_update_audit.py`，向用户汇报**此次更新包内容 + 结合本机情况（含 Persona/遥测分流覆盖）的判断**，再询问是否开启**可选**的禁止自动更新策略；只有用户明确要锁时才写 `"desktop_block_updates_required": true` 并让 👤 双击导入 `installers\win\Claude禁自动更新.reg`（撤回用 `卸载Claude禁自动更新.reg`；注意个人版 `1p` 在 `%APPDATA%\Claude\claude_desktop_config.json` 里写 `disableAutoUpdates` 不生效）。
 对账：`--only sys.timezone,claude.privacy,desktop.updater,sys.language`。
 

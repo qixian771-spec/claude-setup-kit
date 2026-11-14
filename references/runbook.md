@@ -122,10 +122,10 @@ S1（Clash Verge 开好 TUN）完成后，**S2–S8 不需要拆成 7 轮分别�
 
 ## S10 系统设置
 
-组件：`sys.timezone`（必做）、`claude.privacy`（必做，AI 自动补齐 14 项官方隐私静音开关）、`desktop.updater`（默认 ℹ️；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（可选，ℹ️）。
+组件：`claude.privacy`（必做，AI 自动补齐 14 项官方隐私静音开关）、`sys.timezone`（**可选项**，默认 ℹ️，国行/主力机保留北京时间也算通过；专用机要强制改时区时设 `"timezone_required": true`）、`desktop.updater`（默认 ℹ️；用户明确要锁更新时设 `"desktop_block_updates_required": true` 才判 ✅/❌）、`sys.language`（可选，ℹ️）。
 动作：
 0. AI 先运行 `python3 scripts/auto_init.py --privacy-only`（自动备份 `~/.claude/settings.json` 并补齐缺失的 14 项官方隐私静音开关，含 `skipWebFetchPreflight: true`，已有设置不覆盖，无需密码）。
-1. 👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（东京、新加坡、首尔都可以；只有中国大陆、香港、澳门被判 ❌）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
+1. **可选（专用机按需，主力机可跳过）**：👤 系统设置 → 通用 → 日期与时间 → 关自动 → 选 **Claude 出口节点所在国家**的时区（国行日常主力机通常保留北京时间；若保留，如实记录 ippure 时区分即可）。语言顺序按 [ippure 验收](ippure-acceptance.md) 的说明由用户决定。
 2. **更新包审计与可选禁自动更新（必须先查清再询问用户，不默认锁）**：
    - 若 `desktop.updater` 显示已有暂存更新包（`ShipItState.plist` / `ShipIt` 挂起），AI 必须先只读运行 `claude-client-full-reset/scripts/desktop_update_audit.py`（不关 Claude、不改应用目录），向用户汇报两件事：**① 此次更新包具体内容**（版本与 Electron 跨度、原生模块变化、新增域名/接口/遥测事件、是否发现硬件序列号/UUID/MAC 采集或 WebRTC 直连暗桩、Persona 实名页是否纯属云端网页下发，以及个人版 `1p` 遥测照常发往 `api.anthropic.com/api/event_logging/batch` 的实情）；**② 结合这台机器现状的判断**（ShipIt 是否挂起退出即装、当前 Clash 分流是否已覆盖 `withpersona.com` 等核验/遥测域名、受管策略现状）。
    - 汇报后询问用户是否开启**可选**的禁止自动更新策略：保留默认则不动（补齐分流后可正常升级）；只有用户明确选择锁更新时，才在 `mirror.params.json` 设 `"desktop_block_updates_required": true`，并让 👤 双击 `installers/Claude禁自动更新.mobileconfig` → 系统设置 → 通用 → 设备管理 → 安装（注意：个人版 `1p` 在 `claude_desktop_config.json` 或 `defaults write` 里写 `disableAutoUpdates` 都不生效，只有 MDM 受管描述文件生效；若此前 ShipIt 已挂起旧暂存包，由用户在了解后果后决定是否卸掉当前本轮 ShipIt 任务）。

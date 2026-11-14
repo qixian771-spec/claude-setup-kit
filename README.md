@@ -31,12 +31,14 @@ START.md 会在需要时让 AI 克隆另外两个仓库并按它们的手册走�
 | `scripts/next_step.py` | 读对账结果，按步骤顺序打印"现在做什么"；全过时指引跑交卷闸门与 ippure 验收 |
 | `scripts/finish_gate.py` | **防偷懒交卷死闸门**：漏掉任何一项即打印 `FINISH_GATE=BLOCKED` 拒绝交卷；全过才签发 `FINISH_GATE=PASSED` 通关核验码 |
 | `scripts/render.py` | 把 `system/`、`templates/` 的占位符模板按本机参数渲染到独立目录（支持单节点与任意 Clash 协议） |
+| `scripts/ios_render.py` | 一键把本机 Clash 或节点 JSON 转成 iPhone / iPad 配置：V2Box（JSON + 链接）、小火箭（`.conf`）、Stash / Karing（YAML），对齐同出口、关 IPv6、拦 STUN 与 116 规则 |
 | `templates/clash-profile.template.yaml` | 参考机的 Clash 配置（116 条规则，含 Persona 实名、Stripe Radar 刷卡信标、WorkOS 登录与 Statsig 伪装后缀固定走 Claude 出口，去掉了新机器会卡死的 IP-ASN）：Claude 固定出口分组（支持单节点及 VLESS/Trojan/SS/SOCKS5 等任意 Clash 协议）+ 智能按需的 Google 专用分组（仅在主出口被 Google 误判中国时启用 NODE2）+ 遥测/CDN/第三方规则；NODE2、NODE3、NODE4（Cloudflare CDN 备用入口，XHTTP）均可选 |
 | `installers/一键安装全部.command`、`一键撤回全部.command` | **Mac 省事首选**：双击 1 次、输 1 次密码装齐三道墙 + 更新器 + 自检守护 + IPv6 守护 + 体检工具 + 隐私静音开关（Windows 对应 `installers\win\一键安装全部.cmd` / `一键撤回全部.cmd`）；也保留单步 `安装*.command` / `卸载.command` |
 | `installers/Chrome策略.mobileconfig`、`Claude禁自动更新.mobileconfig` | Chrome WebRTC/DoH 策略描述文件；Claude Desktop 可选禁自动更新受管策略（Windows 对应 `Claude禁自动更新.reg`，必须询问用户，默认不装） |
 | `assets/webrtc-test.html` | 本地 WebRTC 候选检查 |
 | `tools/check.py`、`tools/redact_check.py` | 打包检查；脱敏扫描（公网 IP、UUID、凭据、私人路径 0 命中才能提交） |
 | [references/runbook.md](references/runbook.md) / [runbook-windows.md](references/runbook-windows.md) | Mac 路线 S1–S12、Windows 路线 S1–S9 的逐步手册与情景推演 |
+| [references/runbook-ios.md](references/runbook-ios.md) | iPhone / iPad 路线 E 部署手册（国行防漏地区/定位规矩、V2Box 直接扫码 / 小火箭 / Stash / Karing 导入、Safari 网页与原生 App 指引） |
 | [references/cdn-backup.md](references/cdn-backup.md) | 给自己的节点加一个经 Cloudflare CDN 的备用入口（VLESS+XHTTP+TLS，独立 xray 进程、Let's Encrypt、只放行 Cloudflare 段），对应模板里可选的 NODE4 |
 | [references/ippure-acceptance.md](references/ippure-acceptance.md) | 最终以 <https://ippure.com/claude.html> 四项为验收 |
 

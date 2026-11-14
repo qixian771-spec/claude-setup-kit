@@ -207,6 +207,8 @@ class WindowsFailureTests(unittest.TestCase):
         self.assertIn("WARN", items["watch.fresh"]["evidence"])
         host.cmds[("tzutil", "/g")] = (0, "China Standard Time\n", "")
         _, items, _ = run_json(host, "--only", "sys.timezone")
+        self.assertEqual(items["sys.timezone"]["status"], mc.INFO)
+        _, items, _ = run_json(host, "--only", "sys.timezone", "--param", "timezone_required=true")
         self.assertEqual(items["sys.timezone"]["status"], mc.FAIL)
         host.cmds[("nslookup", "-class=chaos", "-type=txt", "whoami.cloudflare", "1.1.1.1")] = (0, 'whoami.cloudflare\ttext =\n\n\t"198.51.100.9"\n', "")
         _, items, _ = run_json(host, "--only", "dns.upstream")

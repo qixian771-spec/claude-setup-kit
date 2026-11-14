@@ -41,10 +41,11 @@
 | 路线 | 进入条件 | 做什么 | 产出 | 交回总入口时带什么 |
 |---|---|---|---|---|
 | **A 建节点** | 用户完全没有可用节点，准备用 VPS 自建 | `git clone https://github.com/qixian771-spec/vps-node-rebuild-3xui` 到旁边，按它的 `SKILL.md` → `references/runbook.md` 部署 3x-ui / VLESS-REALITY 并验收 | 节点参数 | 写成私有目录 JSON（**不进任何仓库**）：默认字段 `NODE1_NAME`、`NODE1_SERVER`、`NODE1_PORT`、`NODE1_UUID`、`NODE1_SNI`、`NODE1_REALITY_PUBLIC_KEY`、`NODE1_REALITY_SHORT_ID`；其它现成节点也可用 `NODE1_TYPE`（`trojan`/`ss`/`socks5`/`vmess`/`hysteria2`）或 `NODE1_PROXY` 原样对象；**仅 `NODE1` 必填**，`NODE2`/`NODE3`/`NODE4` 均可选（[cdn-backup.md](references/cdn-backup.md)） |
-| **B 配 Mac** | 已有节点；macOS（需 `xcode-select -p` 有输出） | S1 导 Clash 配置开 TUN → 双击 `installers/一键安装全部.command` → 双击 `Chrome策略.mobileconfig` + 调时区 → `finish_gate.py` 通关（分步细节见 [执行手册](references/runbook.md)） | `finish_gate.py` `PASSED` + ippure 四项 | 通关核验单、全量对账表、日志路径、截图 |
-| **B′ 配 Windows** | 已有节点；Windows 10/11（需装 Git for Windows、Python 3.9+ 勾 `py launcher`、Clash Verge 服务模式） | S1 导 Clash 配置开服务模式与 TUN → 双击 `installers\win\一键安装全部.cmd` → `py -3 scripts/finish_gate.py` 通关（分步细节见 [Windows 手册](references/runbook-windows.md)） | 同 B | 同 B |
+| **B 配 Mac** | 已有节点；macOS（需 `xcode-select -p` 有输出） | S1 导 Clash 配置开 TUN → 双击 `installers/一键安装全部.command` → 双击 `Chrome策略.mobileconfig` → S10 补官方隐私静音开关（改时区与语言为可选项） → `finish_gate.py` 通关（分步细节见 [执行手册](references/runbook.md)） | `finish_gate.py` `PASSED` + ippure 四项 | 通关核验单、全量对账表、日志路径、截图 |
+| **B′ 配 Windows** | 已有节点；Windows 10/11（需装 Git for Windows、Python 3.9+ 勾 `py launcher`、Clash Verge 服务模式） | S1 导 Clash 配置开服务模式与 TUN → 双击 `installers\win\一键安装全部.cmd`（默认保留北京时间，时区可选） → `py -3 scripts/finish_gate.py` 通关（分步细节见 [Windows 手册](references/runbook-windows.md)） | 同 B | 同 B |
 | **C 清理重置** | 换账号、封号后重来、深度补遥测/分流、拆检待装更新包 | `git clone https://github.com/qixian771-spec/claude-client-full-reset`，读 `SKILL.md`：`identifiers.py` 清理前后快照对比；`telemetry_routing.py` 补遥测与分流；`desktop_update_audit.py` 只读拆检更新包 | 标识对比表 / 审计报告 | `identifiers.py --compare` 退出 0 输出 |
 | **D 全套从零** | 新机器或旧号彻底重来 | 顺序：C（有旧数据时）→ A（没节点时）→ B/B′ → `finish_gate.py` → ippure | 同 B | 同 B |
+| **E 配 iPhone/iPad** | 已有节点或本机 Clash；要配国行/外版 iPhone（V2Box / 小火箭 / Stash / Karing） | 跑 `python3 scripts/ios_render.py --from-local-clash --copy uris --serve`（或 `--nodes`）生成四端防漏配置并弹扫码页 → `V2Box → 配置 → + → 扫描二维码` 扫主码并导入 `路由` 封死 `::/0` IPv6（或用手机网页导入小火箭/Stash/Karing）→ Safari 跑 ippure → 定位设为`永不`、先开 VPN（改地区为`美国`/改时区均为**可选项**，国行主力机按需开启；细节见 [iOS 手册](references/runbook-ios.md)） | `ios_render.py` 四格式 + ippure | 出口锁定同节点、WebRTC/DNS/IPv6 防漏 |
 
 ### 节点与 Google 智能按需分流说明（别再卡用户协议或第 2 节点！）
 1. **任意协议直接用**：用户现有节点不管是 VLESS、Trojan、Shadowsocks（`ss`）、SOCKS5、VMess、Hysteria2，还是旧 Clash 配置里的节点对象，直接用 `NODE1_TYPE` 或 `NODE1_PROXY` 渲染即可。真正的死规矩只有一条：**Claude 的 `出口选择` 固定锁在同一个主出口节点，绝不含 `DIRECT`、绝不来回切**。

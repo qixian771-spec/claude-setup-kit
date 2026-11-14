@@ -93,6 +93,20 @@ Invoke-Logged $Log {
         if (Test-Path (Join-Path $env:LOCALAPPDATA 'claude-setup-kit\claude-wall.ps1')) { Write-Output '已装，跳过' }
         else { RunPs (Join-Path $script:ToolsBuild 'system-win\tools\install-tools.ps1') @('-Build', $script:ToolsBuild) }
     }
-    Step '6/7 时区' { RunPs (Join-Path $script:ToolsBuild 'system-win\tools\set-timezone.ps1') @('-Build', $script:ToolsBuild) }
+    Step '6/7 时区（可选项）' {
+        $tzReq = $false
+        $pfile = Join-Path $Repo 'mirror.params.json'
+        if (Test-Path $pfile) {
+            try {
+                $pdata = Get-Content $pfile -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($pdata.timezone_required -eq $true) { $tzReq = $true }
+            } catch {}
+        }
+        if ($tzReq) {
+            RunPs (Join-Path $script:ToolsBuild 'system-win\tools\set-timezone.ps1') @('-Build', $script:ToolsBuild)
+        } else {
+            Write-Output '[SKIP] 时区为可选项（国行/主力机默认保留原系统时区；如需改美区时区请双击 installers\win\设置时区.cmd）'
+        }
+    }
     Step '7/7 完成' { Write-Output '[OK] 全部组件已安装。撤回：双击 installers\win\一键撤回全部.cmd' }
 }

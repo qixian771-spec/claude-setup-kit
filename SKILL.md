@@ -34,6 +34,7 @@ license: MIT
 | 看看这台机器现在差什么 | `python3 scripts/mirror_check.py`（`--json` 给 AI 解析；`--only id,id` 单项） | [手册 G1](references/runbook.md#g1-摸底只读) |
 | 现在该做哪一步 | `python3 scripts/next_step.py`（退出 3 = 打印了待做步；0 = 全过，去 ippure） | [手册](references/runbook.md) 对应步 |
 | 从零配到和参考机一样 | 手册 S1–S12 顺序执行（Windows：S1–S9） | [执行手册](references/runbook.md) / [Windows 手册](references/runbook-windows.md) |
+| 把同一套防漏规则配到 iPhone/iPad | `python3 scripts/ios_render.py --from-local-clash --copy v2box --serve` | [iOS 手册](references/runbook-ios.md) |
 | 只装某一个组件 | `installers/安装<组件>.command`（用户双击）→ 读 `installers/logs/` | [手册 S2–S9](references/runbook.md#s2-claude-直连墙010) |
 | 把 Clash 配置做成和参考机一样 | `python3 scripts/render.py --component clash --nodes <节点参数.json>` → 导入 Clash Verge | [手册 S1](references/runbook.md#s1-clash-verge) |
 | 卸掉某个组件 | `installers/卸载.command`（用户双击，输入组件名） | [手册附录 A](references/runbook.md#附录-a卸载与回滚) |

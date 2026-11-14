@@ -921,7 +921,9 @@ def check_timezone(host, p, a):
     rc, out, _ = host.run(["readlink", "/etc/localtime"])
     zone = out.strip().split("zoneinfo/")[-1] if "zoneinfo/" in out else out.strip()
     if zone in p["timezone_forbid"]:
-        return FAIL, "时区 %s 在禁止列表（中国大陆/港澳；选 Claude 出口所在国家的时区）" % zone
+        if p.get("timezone_required"):
+            return FAIL, "时区 %s 在禁止列表（中国大陆/港澳；选 Claude 出口所在国家的时区）" % zone
+        return INFO, "时区 %s（ippure 时区项 +30 分；可选项，国行/主力机保留北京时间也算通过）" % zone
     return PASS, "时区 %s" % zone
 
 
